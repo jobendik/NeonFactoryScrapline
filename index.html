@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#000000" />
+  <title>Neon Scrapline: Factory Raid</title>
+  <!-- CrazyGames SDK v3. Optional at runtime — SDKBridge falls back to a
+       stub when window.CrazyGames is unavailable (e.g. local dev). -->
+  <script src="https://sdk.crazygames.com/crazygames-sdk-v3.js"></script>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background:
+        radial-gradient(ellipse at 25% 25%, rgba(34, 246, 255, 0.05) 0%, transparent 50%),
+        radial-gradient(ellipse at 75% 75%, rgba(167, 108, 255, 0.05) 0%, transparent 50%),
+        #03060b;
+      overflow: hidden;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    #game {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    canvas {
+      display: block;
+    }
+    /* M22 — HTML preloader shown before Phaser scenes start. Removed by
+       BootScene once the asset load + save migration is complete. */
+    #nfr-preload {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background:
+        radial-gradient(ellipse at center, rgba(34, 246, 255, 0.08) 0%, transparent 60%),
+        radial-gradient(ellipse at 20% 30%, rgba(167, 108, 255, 0.07) 0%, transparent 50%),
+        #03060b;
+      color: #22f6ff;
+      font-family: monospace, "Courier New", Courier;
+      z-index: 9999;
+      transition: opacity 0.4s ease-out;
+    }
+    #nfr-preload::before {
+      /* Scanline effect over the preloader for instant retro-cyberpunk read. */
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: repeating-linear-gradient(
+        0deg,
+        rgba(34, 246, 255, 0.04) 0,
+        rgba(34, 246, 255, 0.04) 1px,
+        transparent 1px,
+        transparent 3px
+      );
+    }
+    #nfr-preload.fading {
+      opacity: 0;
+      pointer-events: none;
+    }
+    #nfr-preload-title {
+      font-size: clamp(28px, 6vw, 56px);
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      text-shadow:
+        0 0 6px rgba(34, 246, 255, 0.95),
+        0 0 18px rgba(34, 246, 255, 0.75),
+        0 0 36px rgba(34, 246, 255, 0.45),
+        0 0 60px rgba(167, 108, 255, 0.35);
+      margin: 0 0 32px 0;
+      animation: nfr-title-pulse 2.4s ease-in-out infinite;
+    }
+    @keyframes nfr-title-pulse {
+      0%, 100% { filter: brightness(1); }
+      50%      { filter: brightness(1.25); }
+    }
+    #nfr-preload-bar {
+      width: clamp(220px, 50vw, 420px);
+      height: 10px;
+      background: rgba(34, 246, 255, 0.12);
+      border: 1px solid rgba(34, 246, 255, 0.6);
+      overflow: hidden;
+    }
+    #nfr-preload-bar-fill {
+      height: 100%;
+      width: 0%;
+      background: #22f6ff;
+      box-shadow: 0 0 12px rgba(34, 246, 255, 0.85);
+      transition: width 0.25s ease-out;
+    }
+    #nfr-preload-status {
+      margin-top: 12px;
+      font-size: 11px;
+      color: rgba(34, 246, 255, 0.6);
+      letter-spacing: 0.2em;
+    }
+    /* Stuck-loading watchdog UI (playbook §10.6). Hidden until the
+       watchdog fires; surfaces a reload affordance so a busted CDN /
+       script / iframe handshake doesn't strand the player on the bar. */
+    #nfr-preload-recover {
+      margin-top: 22px;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+    #nfr-preload-recover.is-visible {
+      display: flex;
+    }
+    #nfr-preload-recover-msg {
+      font-size: 12px;
+      color: rgba(255, 215, 90, 0.95);
+      letter-spacing: 0.12em;
+      max-width: clamp(220px, 60vw, 460px);
+      text-align: center;
+      line-height: 1.5;
+    }
+    #nfr-preload-recover-btn {
+      background: rgba(34, 246, 255, 0.16);
+      color: #22f6ff;
+      border: 1px solid rgba(34, 246, 255, 0.85);
+      padding: 8px 22px;
+      font-family: inherit;
+      font-size: 12px;
+      letter-spacing: 0.18em;
+      cursor: pointer;
+      text-shadow: 0 0 8px rgba(34, 246, 255, 0.6);
+    }
+    #nfr-preload-recover-btn:hover {
+      background: rgba(34, 246, 255, 0.28);
+    }
+  </style>
+</head>
+<body>
+  <div id="nfr-preload">
+    <h1 id="nfr-preload-title">NEON SCRAPLINE</h1>
+    <div id="nfr-preload-bar"><div id="nfr-preload-bar-fill"></div></div>
+    <div id="nfr-preload-status">LOADING&hellip;</div>
+    <div id="nfr-preload-recover">
+      <div id="nfr-preload-recover-msg">
+        Loading is taking longer than expected.<br/>
+        This usually means a cached file or the platform SDK is misbehaving.
+      </div>
+      <button id="nfr-preload-recover-btn" type="button">RELOAD</button>
+    </div>
+  </div>
+  <div id="game"></div>
+  <script>
+    // Stuck-loading watchdog (playbook §10.6). If the preloader is still
+    // visible 12 seconds after page load, surface a reload button. Boot
+    // success removes the #nfr-preload node, which is what cancels this.
+    (function () {
+      var btn = document.getElementById('nfr-preload-recover-btn');
+      if (btn) {
+        btn.addEventListener('click', function () {
+          try { window.location.reload(); } catch (_) { /* no-op */ }
+        });
+      }
+      setTimeout(function () {
+        var node = document.getElementById('nfr-preload');
+        var recover = document.getElementById('nfr-preload-recover');
+        if (node && recover && !node.classList.contains('fading')) {
+          recover.classList.add('is-visible');
+          // Best-effort analytics ping. CrazyGames SDK may not be ready yet;
+          // we try the public surface and swallow any throw.
+          try {
+            var sdk = (window.CrazyGames || {}).SDK;
+            if (sdk && sdk.analytics && typeof sdk.analytics.trackEvent === 'function') {
+              sdk.analytics.trackEvent('preload_stuck', { elapsedSec: 12 });
+            }
+          } catch (_) { /* SDK not yet usable; recover UI is the actual fix. */ }
+        }
+      }, 12000);
+    })();
+  </script>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

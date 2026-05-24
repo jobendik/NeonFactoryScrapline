@@ -1,0 +1,20 @@
+{
+  "name": "neon-scrapline-factory-raid",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Neon Scrapline: Factory Raid - top-down extraction auto-shooter plus scrap factory progression",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "phaser": "^3.87.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10"
+  }
+}
