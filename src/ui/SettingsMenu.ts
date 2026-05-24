@@ -47,6 +47,11 @@ export class SettingsMenu {
   // panel. Each is a self-contained overlay; only one at a time.
   private subModalRoot: Phaser.GameObjects.Container | null = null;
   private subModalBackdrop: Phaser.GameObjects.Rectangle | null = null;
+  // Playbook §12.5 — scenes we explicitly paused on open() so close() can
+  // resume only those. We do NOT pause scenes that were already paused
+  // (e.g. raid paused for a draft modal) so the existing flow's resume
+  // call still owns lifecycle.
+  private pausedSceneKeys: string[] = [];
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -59,6 +64,7 @@ export class SettingsMenu {
   open(): void {
     if (this.open_) return;
     this.open_ = true;
+    this.pauseUnderlyingGameplay();
     const scene = this.scene;
     const w = scene.scale.width;
     const h = scene.scale.height;
@@ -169,6 +175,39 @@ export class SettingsMenu {
     this.root = null;
     this.backdrop?.destroy();
     this.backdrop = null;
+    this.resumeUnderlyingGameplay();
+  }
+
+  // Playbook §12.5 — pause gameplay scenes that are actively running when
+  // the menu opens, so a player checking controls or audio doesn't take
+  // damage while reading. Scenes that are already paused (raid waiting on
+  // a draft modal, etc.) are skipped — their existing resume path owns
+  // lifecycle and we shouldn't compete.
+  private pauseUnderlyingGameplay(): void {
+    const mgr = this.scene.scene;
+    for (const key of ['RaidScene', 'FactoryScene']) {
+      const target = mgr.get(key);
+      if (target && target.scene.isActive()) {
+        target.scene.pause();
+        this.pausedSceneKeys.push(key);
+      }
+    }
+  }
+
+  private resumeUnderlyingGameplay(): void {
+    if (this.pausedSceneKeys.length === 0) return;
+    const mgr = this.scene.scene;
+    for (const key of this.pausedSceneKeys) {
+      const target = mgr.get(key);
+      // Only resume if the scene is still paused — guard against a draft
+      // / ad flow having taken ownership of pause/resume while we were
+      // open. resume() on an active scene is a no-op anyway, but the
+      // explicit check makes the intent obvious.
+      if (target && target.scene.isPaused()) {
+        target.scene.resume();
+      }
+    }
+    this.pausedSceneKeys = [];
   }
 
   private buildSubMenuButton(x: number, y: number, label: string, onClick: () => void): void {
@@ -192,16 +231,16 @@ export class SettingsMenu {
     this.root.add(labelText);
   }
 
-  // True iff a RaidScene is currently active. The SettingsMenu is owned
-  // by HUDScene, which sits over both Factory and Raid — we only want
-  // the LEAVE RAID button to appear in the latter. We deliberately
-  // exclude the paused state: when a draft or ad modal is up the
-  // RaidScene's time loop is halted, so a forfeit's delayedCall would
-  // never resolve into the SummaryScene transition.
+  // True iff a RaidScene is the active gameplay layer. The menu pauses
+  // gameplay on open(), so by the time we render the LEAVE RAID button
+  // the underlying raid will already be paused — but only if WE paused
+  // it. A raid paused by a draft or ad modal is not ours and would
+  // strand the forfeit's delayedCall, so we still exclude that case.
   private isRaidActive(): boolean {
     const raid = this.scene.scene.get('RaidScene');
     if (!raid) return false;
-    return raid.scene.isActive();
+    if (raid.scene.isActive()) return true;
+    return this.pausedSceneKeys.includes('RaidScene');
   }
 
   // Red-tinted danger button so it can't be confused with a navigation

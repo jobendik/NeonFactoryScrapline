@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { Strings } from '../config/Strings';
 import { sfxUiClick } from '../audio/sfx';
+import { Analytics } from '../platform/Analytics';
 
 // ModalScene — top-of-stack overlay for the §17 rewarded-ad confirmation
 // prompts (per blueprint §21.3 "ad confirmation"). Built as a generic
@@ -17,6 +18,18 @@ import { sfxUiClick } from '../audio/sfx';
 // does NOT touch the launcher's lifecycle — it just renders, gathers a
 // boolean choice, and calls back via onResult.
 
+// Stable placement IDs for analytics. Adding 'unknown' lets old callers
+// that don't pass a placement still work without lying in the dashboard.
+export type AdPlacementId =
+  | 'revive'
+  | 'extendRun'
+  | 'doubleLoot'
+  | 'factoryBoost'
+  | 'clearInfestation'
+  | 'dailyCrate'
+  | 'operatorTryOut'
+  | 'unknown';
+
 export interface ModalAdInit {
   title: string;
   description: string;
@@ -25,6 +38,10 @@ export interface ModalAdInit {
   // Optional border tint (defaults to reward yellow). REVIVE uses extraction
   // green, CLEAR INFESTATION uses danger red.
   borderColor?: number;
+  // Playbook §16.4 — stable placement tag for modal-exposure analytics
+  // (ad_modal_shown / ad_modal_accepted / ad_modal_declined). Optional
+  // so legacy callers don't break the type.
+  placement?: AdPlacementId;
   // Called with true on accept, false on decline. Scene stops itself
   // immediately before the callback fires so onResult logic can launch the
   // next scene without contention.
@@ -36,6 +53,10 @@ const DEFAULT_BORDER = 0xffd75a;
 export class ModalScene extends Phaser.Scene {
   private cfg!: ModalAdInit;
   private resolved = false;
+  // Wall-clock when the modal painted, used to compute time-to-decide on
+  // accept/decline. The dashboard reads this to spot modals players
+  // dismiss instantly (= weak placement) vs. deliberate choices.
+  private shownAtMs = 0;
 
   constructor() {
     super({ key: 'ModalScene' });
@@ -44,9 +65,12 @@ export class ModalScene extends Phaser.Scene {
   init(data: ModalAdInit): void {
     this.cfg = data;
     this.resolved = false;
+    this.shownAtMs = 0;
   }
 
   create(): void {
+    this.shownAtMs = Date.now();
+    Analytics.track('ad_modal_shown', { placement: this.cfg.placement ?? 'unknown' });
     const w = this.scale.width;
     const h = this.scale.height;
 
@@ -144,6 +168,10 @@ export class ModalScene extends Phaser.Scene {
   private finish(accepted: boolean): void {
     if (this.resolved) return;
     this.resolved = true;
+    Analytics.track(accepted ? 'ad_modal_accepted' : 'ad_modal_declined', {
+      placement: this.cfg.placement ?? 'unknown',
+      timeToDecideMs: this.shownAtMs > 0 ? Date.now() - this.shownAtMs : 0,
+    });
     const cb = this.cfg.onResult;
     this.scene.stop();
     cb(accepted);

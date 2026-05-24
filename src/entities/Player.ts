@@ -75,9 +75,11 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     // M23 — apply equipped ship-skin tint. 'skin-default' uses 0xffffff
     // (a no-op tint) so unmodified ships render with their texture color.
     this.setTint(CosmeticSystem.getEquippedSkinColor());
-    // Stronger glow — outer ring at 10 plus a bright inner core at 2 makes
-    // the ship pop against busy battlefields without losing silhouette.
-    applyGlow(this, Balance.colors.player, 10, 2, 0.2);
+    // Subtle neon glow — outer ring at 4 + inner core at 1 makes the ship
+    // pop without dominating the silhouette. Earlier outer=10 produced a
+    // near-solid cyan disc on screen, especially over the FactoryScene
+    // where there's less visual noise to compete with the halo.
+    applyGlow(this, Balance.colors.player, 4, 1, 0.15);
   }
 
   // Create the thruster emitter once per Player. Idle by default; tickThruster

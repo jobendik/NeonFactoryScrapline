@@ -3,7 +3,7 @@ import { Strings } from '../config/Strings';
 import { Economy } from '../systems/EconomySystem';
 import { AdManager } from '../platform/AdManager';
 import { saveSystem } from '../platform/SaveSystem';
-import type { RaidEndPayload, RaidEndState } from '../core/types';
+import type { RaidEndPayload, RaidEndReason, RaidEndState } from '../core/types';
 import { RetentionSystem } from '../systems/RetentionSystem';
 import { OperatorDefs } from '../config/OperatorDefs';
 import { createEmptyMaterials, type MaterialWallet } from '../config/ScraplineDefs';
@@ -31,8 +31,30 @@ const TITLE_COLOR: Record<RaidEndState, string> = {
   collapsed: '#ffd75a',
 };
 
+// Playbook §7.3 coaching line per end-reason. Falls back to the
+// endState-derived default when the payload omits endReason (e.g.
+// old in-flight payloads, or future raid-end paths that forget to set
+// it — extracted/died/timer are obvious enough to coach on the bucket
+// alone).
+function reasonCopy(state: RaidEndState, reason: RaidEndReason | undefined): string {
+  const r: RaidEndReason =
+    reason ??
+    (state === 'extracted' ? 'extracted' : state === 'failed' ? 'died' : 'timer');
+  switch (r) {
+    case 'extracted':
+      return Strings.endReasonExtracted;
+    case 'died':
+      return Strings.endReasonDied;
+    case 'timer':
+      return Strings.endReasonTimer;
+    case 'voluntary':
+      return Strings.endReasonVoluntary;
+  }
+}
+
 export class SummaryScene extends Phaser.Scene {
   private endState: RaidEndState = 'collapsed';
+  private endReason: RaidEndReason | undefined = undefined;
   private loot = { scrap: 0, cores: 0 };
   private materials: MaterialWallet = createEmptyMaterials();
   private zoneName = '';
@@ -60,6 +82,7 @@ export class SummaryScene extends Phaser.Scene {
   init(data: RaidEndPayload): void {
     if (data) {
       this.endState = data.endState;
+      this.endReason = data.endReason;
       this.loot = { scrap: data.loot.scrap, cores: data.loot.cores };
       this.materials = data.loot.materials ?? createEmptyMaterials();
       this.zoneName = data.zoneName ?? '';
@@ -98,6 +121,25 @@ export class SummaryScene extends Phaser.Scene {
         strokeThickness: 4,
       })
       .setOrigin(0.5, 0);
+
+    // Playbook §7.3 — one-line coaching beneath the title. The colour
+    // tracks the outcome (green for extract, soft red for death, gold
+    // for timer/voluntary) so the eye picks it up without reading first.
+    // Skipped for tutorial summaries — the FTUE already does its own
+    // teaching and the single UPGRADE button doesn't need a tip line.
+    if (!this.tutorial) {
+      this.add
+        .text(w / 2, h * 0.255, reasonCopy(this.endState, this.endReason), {
+          fontFamily: 'monospace',
+          fontSize: '15px',
+          color: this.endState === 'extracted' ? '#72ff9f' : this.endState === 'failed' ? '#ff8aa6' : '#ffd75a',
+          stroke: '#000000',
+          strokeThickness: 3,
+          align: 'center',
+          wordWrap: { width: w * 0.72 },
+        })
+        .setOrigin(0.5, 0.5);
+    }
 
     // Modifier badge: greed mult on extract, penalty notice on fail/collapse.
     if (this.endState === 'extracted' && this.greedMult > 1.0) {
@@ -343,6 +385,7 @@ export class SummaryScene extends Phaser.Scene {
     const granted = await AdManager.offer(this, {
       title: Strings.adDoubleLootTitle,
       description: Strings.adDoubleLootDesc,
+      placement: 'doubleLoot',
     });
     if (!granted) return;
     this.doubleLootClaimed = true;

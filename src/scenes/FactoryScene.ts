@@ -75,6 +75,11 @@ export class FactoryScene extends Phaser.Scene {
   private drones: Drone[] = [];
   private upgradeCards: UpgradeCard[] = [];
   private milestoneVisuals: Phaser.GameObjects.GameObject[] = [];
+  // Ambient decorative props — pipes, wall panels, idle chassis, cable
+  // conduits, loading-bay stripes — drawn once on scene create so the
+  // factory reads as a populated workshop even at Gen Lv. 1 (when only
+  // one functional generator spawns). Cleaned up in shutdown().
+  private ambientDecor: Phaser.GameObjects.GameObject[] = [];
   // Pulsing "DEPLOY" prompt that appears the first time a post-tutorial player
   // returns to the factory and has bought Gen Lv. 2. Cleared once they walk on
   // the pad or once raidsCompleted advances past 1.
@@ -117,6 +122,7 @@ export class FactoryScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor(Balance.factory.backgroundColor);
 
     this.drawBackground();
+    this.drawAmbientDecor();
     this.drawPad();
 
     this.player = new Player(this, 0, 0);
@@ -259,6 +265,8 @@ export class FactoryScene extends Phaser.Scene {
     this.upgradeCards = [];
     for (const v of this.milestoneVisuals) v.destroy();
     this.milestoneVisuals = [];
+    for (const v of this.ambientDecor) v.destroy();
+    this.ambientDecor = [];
     this.deployPromptTween?.stop();
     this.deployPromptTween = null;
     this.deployPrompt?.destroy();
@@ -559,6 +567,144 @@ export class FactoryScene extends Phaser.Scene {
       .setDepth(1100)
       .setAlpha(0.45);
     void vignette;
+  }
+
+  // Ambient props that exist regardless of upgrade level so a Gen Lv. 1
+  // factory still reads as a populated workshop. Depth budget:
+  //   -7 → wall panels (sit on the bounds frame)
+  //   -6 → cable conduits running into the deploy pad
+  //   -5 → loading-bay hazard stripes (floor decals above grid)
+  //    0 → upright props (pipes, idle chassis) — below generators (2)
+  //
+  // All graphics are single Phaser.Graphics nodes so the cost is one draw
+  // per layer regardless of how many segments / brackets render.
+  private drawAmbientDecor(): void {
+    const wb = Balance.player.worldBounds;
+    const themeColor = Balance.colors.background; // cyan accent
+    const slate = 0x101820;
+    const dim = 0x182838;
+
+    // --- Wall panels along the far left/right edges. Periodic rectangles
+    //     with a cyan accent stripe at the bottom so they read as
+    //     industrial cabinets rather than solid walls. ---
+    const walls = this.add.graphics().setDepth(-7);
+    const wallHeight = 110;
+    const wallWidth = 24;
+    const wallStep = 180;
+    const wallStartY = wb.minY + 70;
+    walls.fillStyle(dim, 0.9);
+    for (let y = wallStartY; y < wb.maxY - 80; y += wallStep) {
+      walls.fillRect(wb.minX + 12, y, wallWidth, wallHeight);
+      walls.fillRect(wb.maxX - 12 - wallWidth, y, wallWidth, wallHeight);
+    }
+    walls.fillStyle(themeColor, 0.45);
+    for (let y = wallStartY; y < wb.maxY - 80; y += wallStep) {
+      walls.fillRect(wb.minX + 12, y + wallHeight - 4, wallWidth, 3);
+      walls.fillRect(wb.maxX - 12 - wallWidth, y + wallHeight - 4, wallWidth, 3);
+    }
+    this.ambientDecor.push(walls);
+
+    // --- Cable conduits: dim trunks routed from each generator slot to the
+    //     deploy pad, with a thinner cyan trace on top so power feels
+    //     "live". Uses generatorPositions (not the spawned generators) so
+    //     the cables exist even when later slots are still locked. ---
+    const cables = this.add.graphics().setDepth(-6);
+    const drawCableRun = (lineColor: number, lineAlpha: number, width: number): void => {
+      cables.lineStyle(width, lineColor, lineAlpha);
+      for (const gpos of Balance.factory.generatorPositions) {
+        cables.beginPath();
+        cables.moveTo(gpos.x + Balance.factory.generatorSize / 2, gpos.y);
+        cables.lineTo(0, gpos.y);
+        cables.lineTo(0, 0);
+        cables.lineTo(this.padX - this.padRadius - 6, 0);
+        cables.strokePath();
+      }
+    };
+    drawCableRun(slate, 1, 5);
+    drawCableRun(themeColor, 0.55, 2);
+    // Junction nodes at the bends so the cable run reads as routed.
+    cables.fillStyle(themeColor, 0.75);
+    for (const gpos of Balance.factory.generatorPositions) {
+      cables.fillCircle(0, gpos.y, 4);
+    }
+    cables.fillCircle(0, 0, 5);
+    this.ambientDecor.push(cables);
+
+    // --- Loading-bay hazard stripes around the deploy pad. A box of
+    //     diagonal yellow trapezoids cropped to leave the pad circle
+    //     unobstructed so the player's eye still locks onto the pad. ---
+    const stripes = this.add.graphics().setDepth(-5);
+    stripes.fillStyle(0xffd75a, 0.10);
+    const bayHalf = 150;
+    const stripeW = 18;
+    const stripeGap = 16;
+    const bayLeft = this.padX - bayHalf;
+    const bayTop = this.padY - bayHalf;
+    const bayBottom = this.padY + bayHalf;
+    for (let i = -6; i < 18; i++) {
+      const x0 = bayLeft + i * (stripeW + stripeGap);
+      stripes.beginPath();
+      stripes.moveTo(x0, bayTop);
+      stripes.lineTo(x0 + stripeW, bayTop);
+      stripes.lineTo(x0 + stripeW + (bayBottom - bayTop), bayBottom);
+      stripes.lineTo(x0 + (bayBottom - bayTop), bayBottom);
+      stripes.closePath();
+      stripes.fillPath();
+    }
+    // Punch out the pad circle so the stripes don't fight the deploy ring.
+    // We can't subtract from a Graphics path in Phaser easily, so we draw
+    // a dark disc on top at the same depth — visually equivalent.
+    stripes.fillStyle(parseInt(Balance.factory.backgroundColor.slice(1), 16), 1);
+    stripes.fillCircle(this.padX, this.padY, this.padRadius + 6);
+    this.ambientDecor.push(stripes);
+
+    // --- Top + bottom pipe runs spanning the full world width. Slate
+    //     trunk with a cyan inner trace and periodic bracket dots so the
+    //     pipe reads as fastened to the wall. ---
+    const pipes = this.add.graphics().setDepth(0);
+    const pipeTopY = wb.minY + 34;
+    const pipeBotY = wb.maxY - 34;
+    pipes.lineStyle(10, slate, 1);
+    pipes.lineBetween(wb.minX + 50, pipeTopY, wb.maxX - 50, pipeTopY);
+    pipes.lineBetween(wb.minX + 50, pipeBotY, wb.maxX - 50, pipeBotY);
+    pipes.lineStyle(2.5, themeColor, 0.55);
+    pipes.lineBetween(wb.minX + 50, pipeTopY, wb.maxX - 50, pipeTopY);
+    pipes.lineBetween(wb.minX + 50, pipeBotY, wb.maxX - 50, pipeBotY);
+    pipes.fillStyle(themeColor, 0.7);
+    for (let x = wb.minX + 90; x < wb.maxX - 70; x += 130) {
+      pipes.fillCircle(x, pipeTopY, 4);
+      pipes.fillCircle(x, pipeBotY, 4);
+    }
+    this.ambientDecor.push(pipes);
+
+    // --- Idle chassis: 6 non-functional placeholder machine boxes in the
+    //     dead zones so the workshop has neighbours. Distinct from the
+    //     real Generator entity (different color + size) so the player
+    //     doesn't mistake them for upgradeable hardware. ---
+    const chassis = this.add.graphics().setDepth(0);
+    const chassisSpots: Array<{ x: number; y: number; w: number; h: number }> = [
+      { x: -650, y: -350, w: 80, h: 56 },
+      { x: -650, y: 360, w: 80, h: 56 },
+      { x: 130, y: -380, w: 110, h: 50 },
+      { x: 130, y: 360, w: 110, h: 50 },
+      { x: 660, y: -350, w: 80, h: 56 },
+      { x: 660, y: 360, w: 80, h: 56 },
+    ];
+    for (const s of chassisSpots) {
+      const hx = s.x - s.w / 2;
+      const hy = s.y - s.h / 2;
+      chassis.fillStyle(slate, 0.9);
+      chassis.fillRoundedRect(hx, hy, s.w, s.h, 6);
+      chassis.lineStyle(1.5, themeColor, 0.5);
+      chassis.strokeRoundedRect(hx, hy, s.w, s.h, 6);
+      // Status LED — desaturated so it reads as "standby" rather than active.
+      chassis.fillStyle(themeColor, 0.4);
+      chassis.fillCircle(s.x, s.y - s.h / 2 + 6, 2);
+      // Inner panel inset for a bit of texture.
+      chassis.lineStyle(1, themeColor, 0.22);
+      chassis.strokeRect(hx + 6, hy + 12, s.w - 12, s.h - 18);
+    }
+    this.ambientDecor.push(chassis);
   }
 
   private drawPad(): void {
@@ -1434,6 +1580,7 @@ export class FactoryScene extends Phaser.Scene {
     const granted = await AdManager.offer(this, {
       title: Strings.adFactoryBoostTitle,
       description: Strings.adFactoryBoostDesc,
+      placement: 'factoryBoost',
     });
     this.scene.resume();
     if (!granted) return;
@@ -1452,6 +1599,7 @@ export class FactoryScene extends Phaser.Scene {
       title: Strings.adClearInfestationTitle,
       description: Strings.adClearInfestationDesc,
       borderColor: 0xff416b,
+      placement: 'clearInfestation',
     });
     this.scene.resume();
     if (!granted) return;
@@ -1468,6 +1616,7 @@ export class FactoryScene extends Phaser.Scene {
       title: Strings.adDailyCrateTitle,
       description: Strings.adDailyCrateDesc,
       borderColor: 0xa76cff,
+      placement: 'dailyCrate',
     });
     this.scene.resume();
     if (!granted) return;
@@ -1523,6 +1672,7 @@ export class FactoryScene extends Phaser.Scene {
       title: Strings.adOperatorTryOutTitle,
       description: Strings.adOperatorTryOutDesc,
       borderColor: def.color,
+      placement: 'operatorTryOut',
     });
     this.scene.resume();
     if (!granted) return;

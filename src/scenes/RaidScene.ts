@@ -76,6 +76,7 @@ import {
 } from '../audio/sfx';
 import type {
   RaidEndState,
+  RaidEndReason,
   RaidEndPayload,
   RaidInitData,
   RaidMode,
@@ -84,7 +85,7 @@ import type {
 
 type RaidPhase = 'active' | 'extracting' | 'ended';
 
-type TutorialCaptionKey = 'move' | 'dash' | 'powerup' | 'extract';
+type TutorialCaptionKey = 'move' | 'dash' | 'dashImmune' | 'powerup' | 'extract';
 
 // RaidScene drives the raid lifecycle. Through M6 it owns:
 //   - the player, enemies, pickups, bullets pools
@@ -702,6 +703,7 @@ export class RaidScene extends Phaser.Scene {
     const granted = await AdManager.offer(this, {
       title: Strings.adExtendRunTitle,
       description: Strings.adExtendRunDesc,
+      placement: 'extendRun',
     });
     this.adInFlight = false;
     this.scene.resume();
@@ -738,6 +740,7 @@ export class RaidScene extends Phaser.Scene {
       title: Strings.adReviveTitle,
       description: Strings.adReviveDesc,
       borderColor: 0x72ff9f,
+      placement: 'revive',
     });
     this.adInFlight = false;
     if (granted) {
@@ -1344,9 +1347,9 @@ export class RaidScene extends Phaser.Scene {
     }
   }
 
-  private requestEnd(state: RaidEndState): void {
+  private requestEnd(state: RaidEndState, reason?: RaidEndReason): void {
     if (this.phase !== 'active') return;
-    this.finishRaid(state);
+    this.finishRaid(state, reason);
   }
 
   // Playbook §7.5 — visible LEAVE RAID button surfaced through the
@@ -1363,12 +1366,19 @@ export class RaidScene extends Phaser.Scene {
       tutorial: this.isTutorial,
       elapsedSec: Math.round(this.elapsed),
     });
-    this.finishRaid('collapsed');
+    this.finishRaid('collapsed', 'voluntary');
   }
 
-  private finishRaid(state: RaidEndState): void {
+  private finishRaid(state: RaidEndState, reason?: RaidEndReason): void {
     if (this.phase === 'ended') return;
     this.phase = 'ended';
+    // Derive a sensible reason when the caller didn't supply one. Maps the
+    // outcome bucket to its dominant cause: extracted → 'extracted',
+    // failed → 'died', collapsed → 'timer'. The voluntary LEAVE RAID path
+    // overrides 'timer' → 'voluntary' by passing reason explicitly.
+    const resolvedReason: RaidEndReason =
+      reason ??
+      (state === 'extracted' ? 'extracted' : state === 'failed' ? 'died' : 'timer');
     this.extraction.finish();
     this.waveDirector.stop();
     this.greed.stop();
@@ -1392,6 +1402,9 @@ export class RaidScene extends Phaser.Scene {
         mode: this.mode,
         durationSec: Math.round(this.elapsed),
         greedMult: this.greed.getMultiplier(),
+        // Playbook §7.3 — finer-grained "why" so the dashboard can split
+        // collapsed-by-timer from collapsed-by-leave-raid without a join.
+        reason: resolvedReason,
       },
     );
 
@@ -1476,6 +1489,7 @@ export class RaidScene extends Phaser.Scene {
 
     const payload: RaidEndPayload = {
       endState: state,
+      endReason: resolvedReason,
       loot: { scrap, cores, materials },
       greedMult,
       penaltyApplied,
@@ -1542,12 +1556,18 @@ export class RaidScene extends Phaser.Scene {
         ? Strings.ftueMove
         : key === 'dash'
           ? Strings.ftueDash
-          : key === 'powerup'
-            ? Strings.ftuePowerup
-            : Strings.ftueExtract;
+          : key === 'dashImmune'
+            ? Strings.ftueDashImmune
+            : key === 'powerup'
+              ? Strings.ftuePowerup
+              : Strings.ftueExtract;
+    // The dashImmune follow-up renders smaller than the headline captions
+    // so it reads as a clarification of the prior 'DASH' caption rather
+    // than introducing a fresh mechanic.
+    const fontSize = key === 'dashImmune' ? '40px' : '64px';
     const t = this.add.text(this.scale.width / 2, 220, text, {
       fontFamily: 'monospace',
-      fontSize: '64px',
+      fontSize,
       color: '#ffffff',
       stroke: '#000000',
       strokeThickness: 6,

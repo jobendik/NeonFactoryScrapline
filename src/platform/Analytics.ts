@@ -6,6 +6,12 @@
 // developers can see the funnel firing during testing without a network
 // dependency. Production builds with the SDK loaded send events to
 // CrazyGames' dashboard.
+//
+// Playbook §16.5 versioned metrics: every event auto-injects `v` (build
+// version) and `tSec` (seconds since page load). Don't compare metric
+// shifts across builds without filtering by `v`.
+
+import { BUILD_VERSION, SESSION_START_MS } from './BuildInfo';
 
 interface CrazyGamesAnalyticsAPI {
   // v3 SDK methods may return a Promise that rejects in 'disabled' env
@@ -66,11 +72,6 @@ function safeInvoke(fn: () => void | Promise<unknown>): boolean {
   }
 }
 
-// Boot timestamp captured at module-load so error events can include
-// "seconds since the page started" — the playbook §10.7 list calls this
-// out as a required tag so you can tell early-boot crashes apart from
-// late-session ones.
-const moduleLoadMs = typeof performance !== 'undefined' ? performance.now() : 0;
 // De-dupe storm protection: a single bad render frame can throw dozens of
 // times per second. Hash on (message, first line of stack) so we send the
 // first occurrence and silently count the rest in dev only.
@@ -82,9 +83,32 @@ function errorKey(message: string, stack: string | undefined): string {
   return `${message}::${firstStackLine}`.slice(0, 200);
 }
 
+// Seconds since module load. Short property name (`tSec`) so the
+// analytics row stays under the SDK's per-property size budget. Computed
+// fresh on each track() call so the dashboard can render "events vs.
+// time-in-session" without a join.
+function sessionSeconds(): number {
+  if (typeof performance !== 'undefined') {
+    return Math.round((performance.now() - SESSION_START_MS) / 1000);
+  }
+  return Math.round((Date.now() - SESSION_START_MS) / 1000);
+}
+
+// Inject version + session-time tags onto every outbound event so
+// A/B-style comparisons across deploys actually work. Caller-supplied
+// `v` and `tSec` are preserved if present (rare, but lets one-off events
+// override the auto value).
+function withMetaTags(props?: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = { v: BUILD_VERSION, tSec: sessionSeconds() };
+  if (props) {
+    for (const [k, v] of Object.entries(props)) out[k] = v;
+  }
+  return out;
+}
+
 export const Analytics = {
   track(event: string, props?: Record<string, unknown>): void {
-    const cleaned = sanitize(props);
+    const cleaned = sanitize(withMetaTags(props));
     const api = getAnalyticsAPI();
     if (api?.trackEvent && safeInvoke(() => api.trackEvent!(event, cleaned))) return;
     if (api?.event && safeInvoke(() => api.event!(event, cleaned))) return;
@@ -120,10 +144,6 @@ export const Analytics = {
     if (errorSeen.has(key)) return;
     if (errorSeen.size >= ERROR_DEDUPE_CAP) return;
     errorSeen.add(key);
-    const elapsedSec =
-      typeof performance !== 'undefined'
-        ? Math.round((performance.now() - moduleLoadMs) / 1000)
-        : 0;
     Analytics.track('client_error', {
       source,
       message: message.slice(0, 200),
@@ -134,7 +154,6 @@ export const Analytics = {
       lineno: extra?.lineno,
       colno: extra?.colno,
       scene: extra?.scene,
-      elapsedSec,
     });
   },
 };

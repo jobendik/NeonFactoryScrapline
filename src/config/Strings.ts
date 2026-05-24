@@ -35,6 +35,10 @@ const StringsEn = {
   // FTUE captions per blueprint §5.2 - max 4 words each.
   ftueMove: 'MOVE',
   ftueDash: 'DASH',
+  // Playbook §7.3 — pair with the post-raid "died" tip. Plain-English
+  // ("immune") instead of jargon ("i-frames") so the same word that
+  // appears on defeat is the one the tutorial taught.
+  ftueDashImmune: 'DASH = IMMUNE',
   ftuePowerup: 'POWER UP!',
   ftueExtract: 'EXTRACT',
   ftueTutorialBanner: 'TUTORIAL',
@@ -318,6 +322,14 @@ const StringsEn = {
   leaveRaidConfirmBody: 'Half of your unbanked loot will be forfeit.',
   leaveRaidConfirmYes: 'LEAVE',
   leaveRaidConfirmNo: 'KEEP PLAYING',
+
+  // Playbook §7.3 — "make failure explain itself". One short line per
+  // end-reason that names what happened and points at a concrete next
+  // action. Keep these terse: this is coaching, not commentary.
+  endReasonExtracted: 'Signal locked — loot secured.',
+  endReasonDied: 'Core breached. Tip: dash through bullets — you’re immune while dashing.',
+  endReasonTimer: 'Time collapsed. Tip: hold the extraction pad before the timer runs out.',
+  endReasonVoluntary: 'Signal aborted. Half your unbanked loot was salvaged.',
 };
 
 export type Locale = 'en' | 'no' | 'es' | 'pt' | 'de' | 'fr';

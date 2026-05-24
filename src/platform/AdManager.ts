@@ -4,6 +4,7 @@ import { Balance } from '../config/Balance';
 import { saveSystem } from './SaveSystem';
 import { todayUtcDate } from '../config/QuestDefs';
 import { Strings } from '../config/Strings';
+import type { AdPlacementId } from '../scenes/ModalScene';
 
 // AdManager — central state + helpers for the §17.2 rewarded ad placements.
 // Stays thin: per-placement logic (gating, reward application) lives in the
@@ -28,6 +29,11 @@ export interface AdOffer {
   acceptLabel?: string;
   declineLabel?: string;
   borderColor?: number;
+  // Playbook §16.4 modal-exposure analytics. Caller should pass a stable
+  // placement id so the dashboard can split accept/decline rates per
+  // surface (REVIVE vs DOUBLE LOOT etc.). Optional — falls back to
+  // 'unknown' in ModalScene.
+  placement?: AdPlacementId;
 }
 
 export type DailyCrateReward = { kind: 'scrap'; amount: number } | { kind: 'core'; amount: number };
@@ -79,6 +85,7 @@ export const AdManager = {
         acceptLabel: opts.acceptLabel,
         declineLabel: opts.declineLabel,
         borderColor: opts.borderColor,
+        placement: opts.placement,
         onResult: (a: boolean) => resolve(a),
       });
     });

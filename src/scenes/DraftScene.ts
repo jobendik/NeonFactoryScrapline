@@ -6,6 +6,7 @@ import { bus, Events } from '../core/EventBus';
 import { sfxUpgradePurchased } from '../audio/sfx';
 import { UIOverlay, el } from '../ui/overlay/UIOverlay';
 import { cardIcon } from '../ui/overlay/Icons';
+import { Analytics } from '../platform/Analytics';
 
 // DraftScene per blueprint §12. Launched as an overlay by RaidScene at the
 // 20s and 45s draft windows; RaidScene pauses itself before launch so the
@@ -37,10 +38,14 @@ const RARITY_LABEL: Record<CardRarity, string> = {
 export class DraftScene extends Phaser.Scene {
   private cards: CardDef[] = [];
   private raidSceneKey = 'RaidScene';
+  private draftIndex = 0;
   private remaining: number = Balance.cards.autoPickSec;
   private picked = false;
   private timerLabel: HTMLElement | null = null;
   private dismissOverlay: (() => void) | null = null;
+  // Wall-clock when the draft painted, used to compute time-to-decide
+  // on pick / auto-pick (playbook §16.4 modal-exposure metrics).
+  private shownAtMs = 0;
 
   constructor() {
     super({ key: 'DraftScene' });
@@ -49,11 +54,18 @@ export class DraftScene extends Phaser.Scene {
   init(data: DraftSceneInit): void {
     this.cards = data?.cards ?? [];
     this.raidSceneKey = data?.raidSceneKey ?? 'RaidScene';
+    this.draftIndex = data?.draftIndex ?? 0;
     this.remaining = Balance.cards.autoPickSec;
     this.picked = false;
+    this.shownAtMs = 0;
   }
 
   create(): void {
+    this.shownAtMs = Date.now();
+    Analytics.track('draft_shown', {
+      draftIndex: this.draftIndex,
+      cardIds: this.cards.map(c => c.id).join(','),
+    });
     this.buildOverlay();
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.dismissOverlay?.();
@@ -71,7 +83,7 @@ export class DraftScene extends Phaser.Scene {
     if (this.remaining <= 0) {
       const idx = this.cards.length >= 2 ? 1 : 0;
       const fallback = this.cards[idx];
-      if (fallback) this.pick(fallback);
+      if (fallback) this.pick(fallback, /* auto */ true);
     }
   }
 
@@ -128,10 +140,20 @@ export class DraftScene extends Phaser.Scene {
     return wrap;
   }
 
-  private pick(card: CardDef): void {
+  private pick(card: CardDef, auto = false): void {
     if (this.picked) return;
     this.picked = true;
     sfxUpgradePurchased();
+
+    // Modal-exposure metric: split picks vs. auto-picks so we can tell
+    // whether the 8 s window is comfortable or rushed. Time-to-decide is
+    // only meaningful on real picks (auto-pick timing is fixed by config).
+    Analytics.track(auto ? 'draft_auto_picked' : 'draft_picked', {
+      draftIndex: this.draftIndex,
+      cardId: card.id,
+      rarity: card.tier,
+      timeToDecideMs: auto || this.shownAtMs === 0 ? 0 : Date.now() - this.shownAtMs,
+    });
 
     // Hand the picked card to RaidScene through the bus event. RaidScene's
     // listener will mutate RunMods, refresh derived caches, and resume itself.

@@ -7,8 +7,21 @@ export type GameMode = 'factory' | 'raid';
 
 export type RaidEndState = 'extracted' | 'failed' | 'collapsed';
 
+// Fine-grained "why did this raid end" tag. RaidEndState only captures the
+// outcome bucket (extract vs. fail vs. collapse); endReason disambiguates
+// `collapsed` (timer vs. voluntary leave) and gives the SummaryScene a
+// concrete coaching line per playbook §7.3 ("make failure explain itself").
+//   - 'extracted' : signal locked, loot secured
+//   - 'died'      : player HP hit 0
+//   - 'timer'     : raid timer expired before extraction
+//   - 'voluntary' : player used LEAVE RAID on the SettingsMenu
+export type RaidEndReason = 'extracted' | 'died' | 'timer' | 'voluntary';
+
 export interface RaidEndPayload {
   endState: RaidEndState;
+  // Disambiguates `collapsed` (timer vs. voluntary). When omitted,
+  // SummaryScene falls back to the endState-derived default copy.
+  endReason?: RaidEndReason;
   loot: { scrap: number; cores: number; materials?: MaterialWallet };
   // Multiplier already applied to `loot` when state === 'extracted'. 1.0 otherwise.
   greedMult: number;

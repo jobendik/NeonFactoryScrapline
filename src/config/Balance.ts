@@ -66,6 +66,12 @@ export const Balance = {
     captionTimings: [
       { t: 0.0, key: 'move' as const },
       { t: 6.0, key: 'dash' as const },
+      // Playbook §7.3 — the post-raid "died" tip references dashing
+      // through bullets to survive. Teach the i-frame mechanic here so
+      // the coaching line on defeat isn't referencing something the
+      // tutorial never showed. Fits in the 6 s window between 'dash' and
+      // 'powerup' captions; one mechanic per hint per §11.2.
+      { t: 9.0, key: 'dashImmune' as const },
       { t: 12.0, key: 'powerup' as const },
       { t: 18.0, key: 'extract' as const },
     ] as const,
