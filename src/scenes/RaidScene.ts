@@ -19,6 +19,7 @@ import { EnemyDefs } from '../config/EnemyDefs';
 import { PowerupDefs, type PowerupKind } from '../config/PowerupDefs';
 import { bus, Events } from '../core/EventBus';
 import { saveSystem } from '../platform/SaveSystem';
+import { UIOverlay as nfrUIOverlay, el as nfrEl } from '../ui/overlay/UIOverlay';
 import { MusicEngine } from '../audio/music';
 import { DraftSystem } from '../systems/DraftSystem';
 import { createDefaultRunMods, type RunMods } from '../systems/RunMods';
@@ -122,14 +123,28 @@ export class RaidScene extends Phaser.Scene {
   private mode: RaidMode = 'normal';
   private elapsed = 0;
   private captionDoneIdx = -1;
-  private tutorialBanner: Phaser.GameObjects.Text | null = null;
+  private tutorialBannerDismiss: (() => void) | null = null;
+  private zoneBannerDismiss: (() => void) | null = null;
+  // World-pinned floating popups (damage numbers, "NEAR MISS", heal amounts).
+  // Each entry holds the HTML element, its anchor world coord, the per-popup
+  // rise distance/duration, and a spawn timestamp; tickWorldPopups() updates
+  // their screen transforms + opacity each frame and removes expired ones.
+  private worldPopups: Array<{
+    el: HTMLElement;
+    worldX: number;
+    worldY: number;
+    spawn: number;
+    duration: number;
+    rise: number;
+  }> = [];
   private powerups!: Phaser.GameObjects.Group;
   private powerupSystem!: PowerupSystem;
   // §7.3 visual escalation: a red vignette overlay (HUD-relative) whose
   // alpha matches the current greed step's vignette factor; an extra cool
   // tint that fades in at the deep-end (x3) step.
-  private greedVignette: Phaser.GameObjects.Graphics | null = null;
-  private deepEndTint: Phaser.GameObjects.Rectangle | null = null;
+  private greedVignetteEl: HTMLElement | null = null;
+  private deepEndTintEl: HTMLElement | null = null;
+  private _deepEndTintAlpha = 0;
   // Hit-stop: when > 0 we skip update() side effects for a few frames so
   // the kill of a Tank / elite has weight.
   private hitStopTimer = 0;
@@ -157,7 +172,7 @@ export class RaidScene extends Phaser.Scene {
   // Orbiting drone visuals (cosmetic - the actual gameplay effect is the
   // bonusWeaponTargets count read by WeaponSystem). Refreshed on raid start
   // and after a Drone Multiplier card pick.
-  private operatorOrbs: Phaser.GameObjects.Graphics[] = [];
+  private operatorOrbs: HTMLElement[] = [];
   private orbAngle = 0;
   // M17 — kills against 'infested' enemies this raid. Counts toward
   // restoring infested machines at raid end.
@@ -182,7 +197,7 @@ export class RaidScene extends Phaser.Scene {
   // position at activation time and auto-fires on the nearest enemy. We
   // anchor at activation so dropping it as you move feels like placing a
   // sentry rather than a follower.
-  private turret: { x: number; y: number; cooldown: number; gfx: Phaser.GameObjects.Graphics } | null = null;
+  private turret: { x: number; y: number; cooldown: number; el: HTMLElement } | null = null;
   private onPlayerDied = (): void => {
     void this.handlePlayerDied();
   };
@@ -195,17 +210,17 @@ export class RaidScene extends Phaser.Scene {
     const r = this.runMods.novaDashRadius;
     const r2 = r * r;
     const dmg = this.runMods.novaDashDamage;
-    // Draw a short-lived visual ring.
-    const gfx = this.add.graphics();
-    gfx.setDepth(12);
-    gfx.lineStyle(4, 0xffd75a, 1);
-    gfx.strokeCircle(x, y, r);
-    this.tweens.add({
-      targets: gfx,
-      alpha: 0,
-      duration: 240,
-      onComplete: () => gfx.destroy(),
-    });
+    // Draw a short-lived visual ring via CSS animation.
+    const cam = this.cameras.main;
+    const canvasRect = this.game.canvas.getBoundingClientRect();
+    const cssScale = canvasRect.width / this.scale.width;
+    const sx = (x - cam.scrollX) * cam.zoom * cssScale;
+    const sy = (y - cam.scrollY) * cam.zoom * cssScale;
+    const novaEl = nfrEl('div', 'nfr-nova-ring');
+    novaEl.style.setProperty('--nfr-nova-r', r + 'px');
+    novaEl.style.transform = `translate(calc(${sx.toFixed(1)}px - 50%), calc(${sy.toFixed(1)}px - 50%))`;
+    const dismissNova = nfrUIOverlay.mountHud(this, novaEl);
+    novaEl.addEventListener('animationend', () => dismissNova(), { once: true });
     // Damage all enemies in radius via spatial grid.
     const nearby = this.enemyGrid.queryNearby(x, y, r, []);
     for (const e of nearby) {
@@ -439,29 +454,31 @@ export class RaidScene extends Phaser.Scene {
   // Multiplier). The orbs are graphics-only — they don't fire themselves;
   // bonusWeaponTargets is what actually feeds WeaponSystem.
   private refreshOperatorOrbs(): void {
-    for (const o of this.operatorOrbs) o.destroy();
+    for (const o of this.operatorOrbs) o.remove();
     this.operatorOrbs = [];
     const count = Math.max(0, Math.floor(this.runMods.bonusWeaponTargets));
     if (count <= 0) return;
     for (let i = 0; i < count; i++) {
-      const g = this.add.graphics().setDepth(this.player.depth + 1);
-      g.fillStyle(0xa76cff, 0.9);
-      g.lineStyle(1.5, 0xffffff, 0.95);
-      g.fillCircle(0, 0, 5);
-      g.strokeCircle(0, 0, 5);
-      this.operatorOrbs.push(g);
+      const orb = nfrEl('div', 'nfr-raid-orb');
+      nfrUIOverlay.mountHud(this, orb);
+      this.operatorOrbs.push(orb);
     }
   }
 
   private tickOperatorOrbs(dt: number): void {
     if (this.operatorOrbs.length === 0) return;
     this.orbAngle += dt * 2.0;
+    const cam = this.cameras.main;
+    const canvasRect = this.game.canvas.getBoundingClientRect();
+    const cssScale = canvasRect.width / this.scale.width;
     const r = 36;
     for (let i = 0; i < this.operatorOrbs.length; i++) {
       const angle = this.orbAngle + (i / this.operatorOrbs.length) * Math.PI * 2;
-      const x = this.player.x + Math.cos(angle) * r;
-      const y = this.player.y + Math.sin(angle) * r;
-      this.operatorOrbs[i].setPosition(x, y);
+      const wx = this.player.x + Math.cos(angle) * r;
+      const wy = this.player.y + Math.sin(angle) * r;
+      const sx = (wx - cam.scrollX) * cam.zoom * cssScale;
+      const sy = (wy - cam.scrollY) * cam.zoom * cssScale;
+      this.operatorOrbs[i].style.transform = `translate(calc(${sx.toFixed(1)}px - 50%), calc(${sy.toFixed(1)}px - 50%))`;
     }
   }
 
@@ -684,6 +701,10 @@ export class RaidScene extends Phaser.Scene {
     if (this.timeRemaining <= 0 && !this.adInFlight) {
       void this.handleTimerExpired();
     }
+
+    // World-pinned HTML popups (damage numbers / NEAR MISS / heal amounts)
+    // re-project to camera space every frame.
+    this.tickWorldPopups();
   }
 
   // M20 EXTEND RUN — when the timer hits 0, optionally offer +30s before
@@ -824,37 +845,17 @@ export class RaidScene extends Phaser.Scene {
     }
   }
 
-  // Build the M14 greed-step visuals (HUD-relative). Both overlays render at
-  // depth above gameplay but below HUDScene's UI strip.
+  // Build the M14 greed-step visuals as HTML/CSS overlays.
   private buildGreedOverlays(): void {
-    this.greedVignette?.destroy();
-    this.deepEndTint?.destroy();
-    this.greedVignette = this.add.graphics().setScrollFactor(0).setDepth(1800);
-    this.greedVignette.setAlpha(0);
-    this.deepEndTint = this.add
-      .rectangle(0, 0, this.scale.width, this.scale.height, 0x0a1428, 0.22)
-      .setOrigin(0, 0)
-      .setScrollFactor(0)
-      .setDepth(1801)
-      .setAlpha(0);
-    this.drawGreedVignette();
-  }
-
-  private drawGreedVignette(): void {
-    const g = this.greedVignette;
-    if (!g) return;
-    g.clear();
-    const w = this.scale.width;
-    const h = this.scale.height;
-    // Layer a series of inset rectangles in increasing alpha to fake a
-    // radial vignette. Cheap, and enough for the "danger frame" feel.
-    const color = Balance.colors.danger;
-    const bands = 6;
-    for (let i = 0; i < bands; i++) {
-      const inset = (i / bands) * Math.min(w, h) * 0.45;
-      g.lineStyle(Math.max(2, (1 - i / bands) * 22), color, 0.18);
-      g.strokeRect(inset, inset, w - inset * 2, h - inset * 2);
-    }
+    this.greedVignetteEl?.remove();
+    this.deepEndTintEl?.remove();
+    this._deepEndTintAlpha = 0;
+    this.greedVignetteEl = nfrEl('div', 'nfr-greed-vignette');
+    this.greedVignetteEl.style.opacity = '0';
+    nfrUIOverlay.mountHud(this, this.greedVignetteEl);
+    this.deepEndTintEl = nfrEl('div', 'nfr-deep-end-tint');
+    this.deepEndTintEl.style.opacity = '0';
+    nfrUIOverlay.mountHud(this, this.deepEndTintEl);
   }
 
   // Update the §7.3 visual escalation overlays for the current greed step.
@@ -863,23 +864,22 @@ export class RaidScene extends Phaser.Scene {
   private updateGreedVisuals(step: number): void {
     const esc = Balance.raid.greedEscalation[Math.max(0, Math.min(Balance.raid.greedEscalation.length - 1, step))];
     const reducedMotion = QualityManager.isReducedMotion();
-    const g = this.greedVignette;
-    if (g) {
+    if (this.greedVignetteEl) {
+      let alpha: number;
       if (reducedMotion) {
-        // Flat half-intensity overlay — communicates danger without pulsing.
-        g.setAlpha(Math.min(0.35, esc.vignette * 0.5));
+        alpha = Math.min(0.35, esc.vignette * 0.5);
       } else {
         // Mild sine pulse on top of the step-base intensity so the danger
         // frame breathes rather than sits flat.
         const breathe = (Math.sin(this.elapsed * 3.4) + 1) / 2;
-        const alpha = Math.max(0, Math.min(1, esc.vignette * (0.85 + breathe * 0.3)));
-        g.setAlpha(alpha);
+        alpha = Math.max(0, Math.min(1, esc.vignette * (0.85 + breathe * 0.3)));
       }
+      this.greedVignetteEl.style.opacity = String(alpha);
     }
-    if (this.deepEndTint) {
+    if (this.deepEndTintEl) {
       const want = !reducedMotion && step >= Balance.raid.deepEndTintAt ? 0.42 : 0;
-      const cur = this.deepEndTint.alpha;
-      this.deepEndTint.setAlpha(cur + (want - cur) * 0.05);
+      this._deepEndTintAlpha += (want - this._deepEndTintAlpha) * 0.05;
+      this.deepEndTintEl.style.opacity = String(this._deepEndTintAlpha);
     }
   }
 
@@ -896,19 +896,28 @@ export class RaidScene extends Phaser.Scene {
     this.greed.stop();
     this.powerupSystem.stop();
     MusicEngine.stop();
-    if (this.tutorialBanner) {
-      this.tutorialBanner.destroy();
-      this.tutorialBanner = null;
+    if (this.tutorialBannerDismiss) {
+      this.tutorialBannerDismiss();
+      this.tutorialBannerDismiss = null;
     }
-    this.greedVignette?.destroy();
-    this.greedVignette = null;
-    this.deepEndTint?.destroy();
-    this.deepEndTint = null;
+    if (this.zoneBannerDismiss) {
+      this.zoneBannerDismiss();
+      this.zoneBannerDismiss = null;
+    }
+    // Tear down any in-flight world-pinned popups so they don't outlive the
+    // scene (mountHud also auto-cleans on SHUTDOWN, but explicit is cleaner).
+    for (const p of this.worldPopups) p.el.remove();
+    this.worldPopups = [];
+    this.activePopups = 0;
+    this.greedVignetteEl?.remove();
+    this.greedVignetteEl = null;
+    this.deepEndTintEl?.remove();
+    this.deepEndTintEl = null;
     this.nearMissAwarded.clear();
-    for (const o of this.operatorOrbs) o.destroy();
+    for (const o of this.operatorOrbs) o.remove();
     this.operatorOrbs = [];
     if (this.turret) {
-      this.turret.gfx.destroy();
+      this.turret.el.remove();
       this.turret = null;
     }
     this.weapons.destroy?.();
@@ -1152,27 +1161,74 @@ export class RaidScene extends Phaser.Scene {
   }
 
   private showPopup(x: number, y: number, text: string, color: string): void {
+    this.spawnWorldPopup(x, y, text, {
+      color,
+      fontSize: 14,
+      bold: false,
+      rise: Balance.ui.popupRiseDist,
+      duration: Balance.ui.popupDurationMs,
+    });
+  }
+
+  // ---- shared world-pinned popup engine ----
+  // Spawns an HTML node anchored to a world coordinate. Each frame the
+  // transform is recomputed (cam scroll * zoom * cssScale) and the rise +
+  // opacity easing is applied. Replaces the old Phaser this.add.text +
+  // tween path so popups use CSS rendering instead of the canvas font.
+  private spawnWorldPopup(
+    worldX: number,
+    worldY: number,
+    text: string,
+    opts: { color: string; fontSize: number; bold: boolean; rise: number; duration: number },
+  ): void {
     if (this.activePopups >= Balance.performance.maxPopups) return;
     this.activePopups++;
-    const t = this.add.text(x, y, text, {
-      fontFamily: 'monospace',
-      fontSize: '14px',
-      color,
-      stroke: '#000000',
-      strokeThickness: 3,
-    });
-    t.setOrigin(0.5).setDepth(100);
-    this.tweens.add({
-      targets: t,
-      y: y - Balance.ui.popupRiseDist,
-      alpha: 0,
-      duration: Balance.ui.popupDurationMs,
-      ease: 'Cubic.easeOut',
-      onComplete: () => {
-        t.destroy();
-        this.activePopups--;
-      },
-    });
+    const node = nfrEl('div', 'nfr-worldpin nfr-floater');
+    node.textContent = text;
+    node.style.color = opts.color;
+    node.style.fontSize = `${opts.fontSize}px`;
+    node.style.fontWeight = opts.bold ? '800' : '700';
+    node.style.textShadow = `0 0 6px ${opts.color}aa, 0 2px 4px rgba(0,0,0,0.95)`;
+    nfrUIOverlay.mountHud(this, node);
+    const popup = {
+      el: node,
+      worldX,
+      worldY,
+      spawn: this.time.now,
+      duration: opts.duration,
+      rise: opts.rise,
+    };
+    this.worldPopups.push(popup);
+    this.applyPopupTransform(popup, 0);
+  }
+
+  private applyPopupTransform(
+    popup: { el: HTMLElement; worldX: number; worldY: number; rise: number },
+    t: number,
+  ): void {
+    const cam = this.cameras.main;
+    const designW = this.scale.width;
+    const canvasRect = this.game.canvas.getBoundingClientRect();
+    const cssScale = designW > 0 ? canvasRect.width / designW : 1;
+    const sx = (popup.worldX - cam.scrollX) * cam.zoom * cssScale;
+    const sy = (popup.worldY - cam.scrollY - popup.rise * t) * cam.zoom * cssScale;
+    popup.el.style.transform = `translate(calc(${sx.toFixed(1)}px - 50%), calc(${sy.toFixed(1)}px - 50%))`;
+    // Cubic-ease-out fade: starts opaque, fades to zero by t=1.
+    popup.el.style.opacity = `${(1 - t * t * t).toFixed(3)}`;
+  }
+
+  private tickWorldPopups(): void {
+    const now = this.time.now;
+    for (let i = this.worldPopups.length - 1; i >= 0; i--) {
+      const p = this.worldPopups[i];
+      const t = Math.min(1, (now - p.spawn) / p.duration);
+      this.applyPopupTransform(p, t);
+      if (t >= 1) {
+        p.el.remove();
+        this.worldPopups.splice(i, 1);
+        this.activePopups = Math.max(0, this.activePopups - 1);
+      }
+    }
   }
 
   private drawBackground(): void {
@@ -1251,46 +1307,53 @@ export class RaidScene extends Phaser.Scene {
       });
     }
 
-    // Foreground neon grid lines tinted by the zone's accent color so the
-    // arena's "place identity" extends past the backdrop tile.
-    const grid = this.add.graphics();
-    grid.lineStyle(1, theme.accentColor, 0.18);
+    // Foreground neon grid lines tinted by the zone's accent color — baked
+    // into a RenderTexture so no persistent Graphics objects remain.
     const step = Balance.ui.gridStep;
+    const rtGrid = this.add.renderTexture(0, 0, worldW, worldH).setOrigin(0, 0).setDepth(-10);
+    const gGrid = this.add.graphics();
+    gGrid.lineStyle(1, theme.accentColor, 0.18);
     for (let x = wb.minX; x <= wb.maxX; x += step) {
-      grid.moveTo(x, wb.minY);
-      grid.lineTo(x, wb.maxY);
+      gGrid.moveTo(x, wb.minY);
+      gGrid.lineTo(x, wb.maxY);
     }
     for (let y = wb.minY; y <= wb.maxY; y += step) {
-      grid.moveTo(wb.minX, y);
-      grid.lineTo(wb.maxX, y);
+      gGrid.moveTo(wb.minX, y);
+      gGrid.lineTo(wb.maxX, y);
     }
-    grid.strokePath();
-    grid.setDepth(-10);
-    // Bright accent every 4 cells so the arena has anchor lines.
-    const accent = this.add.graphics();
-    accent.lineStyle(1.5, theme.accentColor, 0.35);
+    gGrid.strokePath();
+    rtGrid.draw(gGrid, -wb.minX, -wb.minY);
+    gGrid.destroy();
+    rtGrid.setPosition(wb.minX, wb.minY);
+    // Bright accent every 4 cells — baked into a second RT.
     const big = step * 4;
+    const rtAccent = this.add.renderTexture(0, 0, worldW, worldH).setOrigin(0, 0).setDepth(-9);
+    const gAccent = this.add.graphics();
+    gAccent.lineStyle(1.5, theme.accentColor, 0.35);
     for (let x = wb.minX; x <= wb.maxX; x += big) {
-      accent.moveTo(x, wb.minY);
-      accent.lineTo(x, wb.maxY);
+      gAccent.moveTo(x, wb.minY);
+      gAccent.lineTo(x, wb.maxY);
     }
     for (let y = wb.minY; y <= wb.maxY; y += big) {
-      accent.moveTo(wb.minX, y);
-      accent.lineTo(wb.maxX, y);
+      gAccent.moveTo(wb.minX, y);
+      gAccent.lineTo(wb.maxX, y);
     }
-    accent.strokePath();
-    accent.setDepth(-9);
+    gAccent.strokePath();
+    rtAccent.draw(gAccent, -wb.minX, -wb.minY);
+    gAccent.destroy();
+    rtAccent.setPosition(wb.minX, wb.minY);
 
-    // Glowing arena boundary frame — uses canvas shadowBlur via preFX glow on
-    // a regular Graphics. The boundary inherits the zone accent so the very
-    // edge of the arena signals what zone you're in.
-    const bounds = this.add.graphics();
-    bounds.lineStyle(3, theme.accentColor, 0.9);
-    bounds.strokeRect(wb.minX, wb.minY, worldW, worldH);
-    bounds.lineStyle(1, 0xffffff, 0.45);
-    bounds.strokeRect(wb.minX + 4, wb.minY + 4, worldW - 8, worldH - 8);
-    bounds.setDepth(-8);
-    applyGlow(bounds, theme.accentColor, 6, 0);
+    // Glowing arena boundary — baked into RT so it can receive applyGlow.
+    const rtBounds = this.add.renderTexture(0, 0, worldW, worldH).setOrigin(0, 0).setDepth(-8);
+    const gBounds = this.add.graphics();
+    gBounds.lineStyle(3, theme.accentColor, 0.9);
+    gBounds.strokeRect(wb.minX, wb.minY, worldW, worldH);
+    gBounds.lineStyle(1, 0xffffff, 0.45);
+    gBounds.strokeRect(wb.minX + 4, wb.minY + 4, worldW - 8, worldH - 8);
+    rtBounds.draw(gBounds, -wb.minX, -wb.minY);
+    gBounds.destroy();
+    rtBounds.setPosition(wb.minX, wb.minY);
+    applyGlow(rtBounds, theme.accentColor, 6, 0);
 
     // Screen-fixed vignette overlay so the player's eye is drawn to center.
     // The greedVignette built later layers ON TOP of this.
@@ -1561,56 +1624,31 @@ export class RaidScene extends Phaser.Scene {
             : key === 'powerup'
               ? Strings.ftuePowerup
               : Strings.ftueExtract;
-    // The dashImmune follow-up renders smaller than the headline captions
-    // so it reads as a clarification of the prior 'DASH' caption rather
-    // than introducing a fresh mechanic.
-    const fontSize = key === 'dashImmune' ? '40px' : '64px';
-    const t = this.add.text(this.scale.width / 2, 220, text, {
-      fontFamily: 'monospace',
-      fontSize,
-      color: '#ffffff',
-      stroke: '#000000',
-      strokeThickness: 6,
-    });
-    t.setOrigin(0.5).setScrollFactor(0).setDepth(2200).setAlpha(0);
-    this.tweens.add({
-      targets: t,
-      alpha: 1,
-      duration: Balance.tutorial.captionFadeMs,
-      ease: 'Cubic.easeOut',
-    });
+    const small = key === 'dashImmune';
+    const node = nfrEl('div', `nfr-ftue-caption ${small ? 'is-sub' : ''}`);
+    node.textContent = text;
+    const dismiss = nfrUIOverlay.mountHud(this, node);
+    // Fade-in via class swap on next frame so the CSS transition fires.
+    requestAnimationFrame(() => node.classList.add('is-visible'));
     this.time.delayedCall(Balance.tutorial.captionHoldSec * 1000, () => {
-      this.tweens.add({
-        targets: t,
-        alpha: 0,
-        duration: Balance.tutorial.captionFadeMs,
-        onComplete: () => t.destroy(),
-      });
+      node.classList.remove('is-visible');
+      this.time.delayedCall(Balance.tutorial.captionFadeMs, () => dismiss());
     });
   }
 
   private spawnTutorialBanner(): void {
-    const banner = this.add.text(this.scale.width / 2, 6, Strings.ftueTutorialBanner, {
-      fontFamily: 'monospace',
-      fontSize: '12px',
-      color: '#888888',
-      stroke: '#000000',
-      strokeThickness: 2,
-    });
-    banner.setOrigin(0.5, 0).setScrollFactor(0).setDepth(2050);
-    this.tutorialBanner = banner;
+    const banner = nfrEl('div', 'nfr-raid-banner is-tutorial');
+    banner.textContent = Strings.ftueTutorialBanner;
+    this.tutorialBannerDismiss = nfrUIOverlay.mountHud(this, banner);
   }
 
   private spawnZoneBanner(): void {
     const label = `${this.zone.name.toUpperCase()}  |  THREAT x${this.zone.threatMult.toFixed(2)}`;
-    const banner = this.add.text(this.scale.width / 2, 6, label, {
-      fontFamily: 'monospace',
-      fontSize: '12px',
-      color: this.zone.color,
-      stroke: '#000000',
-      strokeThickness: 2,
-    });
-    banner.setOrigin(0.5, 0).setScrollFactor(0).setDepth(2050);
+    const banner = nfrEl('div', 'nfr-raid-banner is-zone');
+    banner.textContent = label;
+    banner.style.color = this.zone.color;
+    banner.style.textShadow = `0 0 8px ${this.zone.color}80, 0 2px 4px rgba(0,0,0,0.95)`;
+    this.zoneBannerDismiss = nfrUIOverlay.mountHud(this, banner);
   }
 
   private spawnInitialScrapPile(): void {
@@ -1653,28 +1691,30 @@ export class RaidScene extends Phaser.Scene {
   // Drops a friendly auto-fire turret at (x, y). Active while the
   // turretDrop power-up is. Disposed in tickTurret when the buff ends.
   private placeTurret(x: number, y: number): void {
-    if (this.turret) this.turret.gfx.destroy();
-    const gfx = this.add.graphics();
-    gfx.setDepth(8);
-    gfx.fillStyle(0xff9c3d, 1);
-    gfx.fillCircle(0, 0, 11);
-    gfx.lineStyle(2, 0xffffff, 0.85);
-    gfx.strokeCircle(0, 0, 11);
-    gfx.lineBetween(0, 0, 14, 0);
-    gfx.setPosition(x, y);
-    this.turret = { x, y, cooldown: 0, gfx };
+    if (this.turret) this.turret.el.remove();
+    const el = nfrEl('div', 'nfr-raid-turret');
+    nfrUIOverlay.mountHud(this, el);
+    this.turret = { x, y, cooldown: 0, el };
   }
 
   // Per-frame: fire at the nearest enemy in range, dispose when buff ends.
   private tickTurret(dt: number): void {
     if (!this.turret) return;
     if (!this.powerupSystem.isTurretActive()) {
-      this.turret.gfx.destroy();
+      this.turret.el.remove();
       this.turret = null;
       return;
     }
     const t = this.turret;
+    // Update screen position each frame so the turret tracks camera scroll.
+    const cam = this.cameras.main;
+    const canvasRect = this.game.canvas.getBoundingClientRect();
+    const cssScale = canvasRect.width / this.scale.width;
+    const sx = (t.x - cam.scrollX) * cam.zoom * cssScale;
+    const sy = (t.y - cam.scrollY) * cam.zoom * cssScale;
+    t.el.style.transform = `translate(calc(${sx.toFixed(1)}px - 50%), calc(${sy.toFixed(1)}px - 50%))`;
     t.cooldown -= dt;
+    if (t.cooldown > 0) return;
     if (t.cooldown > 0) return;
     // Reuse the WeaponSystem's tracer rendering for visual consistency, but
     // pick a target from the spatial grid centered on the turret rather than
@@ -1771,28 +1811,14 @@ export class RaidScene extends Phaser.Scene {
   // path that always renders big/red regardless of combo.
   private showDamagePopup(x: number, y: number, damage: number, baseColor: string = '#ffffff', crit: boolean = false): void {
     const big = this.combo >= 2.0 || crit;
-    const fontSize = big ? '20px' : '14px';
+    const fontSize = big ? 20 : 14;
     const color = crit ? '#ff416b' : (big ? '#ffd75a' : baseColor);
-    if (this.activePopups >= Balance.performance.maxPopups) return;
-    this.activePopups++;
-    const t = this.add.text(x, y, `-${Math.round(damage)}`, {
-      fontFamily: 'monospace',
-      fontSize,
+    this.spawnWorldPopup(x, y, `-${Math.round(damage)}`, {
       color,
-      stroke: '#000000',
-      strokeThickness: big ? 4 : 3,
-    });
-    t.setOrigin(0.5).setDepth(100);
-    this.tweens.add({
-      targets: t,
-      y: y - Balance.ui.popupRiseDist * (big ? 1.4 : 1),
-      alpha: 0,
+      fontSize,
+      bold: big,
+      rise: Balance.ui.popupRiseDist * (big ? 1.4 : 1),
       duration: Balance.ui.popupDurationMs,
-      ease: 'Cubic.easeOut',
-      onComplete: () => {
-        t.destroy();
-        this.activePopups--;
-      },
     });
   }
 
@@ -1899,37 +1925,20 @@ export class RaidScene extends Phaser.Scene {
   }
 
   private spawnRadialFlash(): void {
-    const px = this.player.x;
-    const py = this.player.y;
+    const cam = this.cameras.main;
+    const canvasRect = this.game.canvas.getBoundingClientRect();
+    const cssScale = canvasRect.width / this.scale.width;
+    const sx = (this.player.x - cam.scrollX) * cam.zoom * cssScale;
+    const sy = (this.player.y - cam.scrollY) * cam.zoom * cssScale;
 
-    const flash = this.add.graphics();
-    flash.fillStyle(0xffffff, 0.85);
-    flash.fillCircle(0, 0, 60);
-    flash.setPosition(px, py);
-    flash.setDepth(900);
-    this.tweens.add({
-      targets: flash,
-      scaleX: Balance.extraction.momentFlashMaxScale,
-      scaleY: Balance.extraction.momentFlashMaxScale,
-      alpha: 0,
-      duration: Balance.extraction.momentFlashDurationMs,
-      ease: 'Cubic.easeOut',
-      onComplete: () => flash.destroy(),
-    });
+    const flash = nfrEl('div', 'nfr-radial-flash');
+    flash.style.transform = `translate(calc(${sx.toFixed(1)}px - 50%), calc(${sy.toFixed(1)}px - 50%))`;
+    const d1 = nfrUIOverlay.mountHud(this, flash);
+    flash.addEventListener('animationend', () => d1(), { once: true });
 
-    const ring = this.add.graphics();
-    ring.lineStyle(8, Balance.colors.extraction, 1);
-    ring.strokeCircle(0, 0, 90);
-    ring.setPosition(px, py);
-    ring.setDepth(901);
-    this.tweens.add({
-      targets: ring,
-      scaleX: Balance.extraction.momentRingMaxScale,
-      scaleY: Balance.extraction.momentRingMaxScale,
-      alpha: 0,
-      duration: Balance.extraction.momentRingDurationMs,
-      ease: 'Quad.easeOut',
-      onComplete: () => ring.destroy(),
-    });
+    const ring = nfrEl('div', 'nfr-radial-ring');
+    ring.style.transform = `translate(calc(${sx.toFixed(1)}px - 50%), calc(${sy.toFixed(1)}px - 50%))`;
+    const d2 = nfrUIOverlay.mountHud(this, ring);
+    ring.addEventListener('animationend', () => d2(), { once: true });
   }
 }

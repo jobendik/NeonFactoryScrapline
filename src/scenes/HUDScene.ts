@@ -10,6 +10,9 @@ import { QualityManager } from '../systems/QualityManager';
 import { bus, Events } from '../core/EventBus';
 import { AchievementDefs, type AchievementId } from '../systems/AchievementSystem';
 import { HUDOverlay } from '../ui/overlay/HUDOverlay';
+import { ToastManager } from '../ui/overlay/ToastManager';
+import { AchievementCallout } from '../ui/overlay/AchievementCallout';
+import { UIOverlay as nfrUIOverlay, el as nfrEl } from '../ui/overlay/UIOverlay';
 import type { RaidScene } from './RaidScene';
 import type { FactoryScene } from './FactoryScene';
 
@@ -22,10 +25,13 @@ const HP_LOW_RATIO = 0.30;
 
 export class HUDScene extends Phaser.Scene {
   private overlay!: HUDOverlay;
-  // Phaser-only widgets that still need canvas-space coordinates / scene tweens.
-  private waypoint!: Phaser.GameObjects.Graphics;
+  private toasts!: ToastManager;
+  private achievementCallout!: AchievementCallout;
+  // HUD chrome is fully HTML/SVG; the canvas only renders gameplay.
+  private waypointEl: HTMLElement | null = null;
+  private waypointPoly: SVGPolygonElement | null = null;
   private settingsMenu!: SettingsMenu;
-  private perfOverlay: Phaser.GameObjects.Text | null = null;
+  private perfOverlayEl: HTMLElement | null = null;
   private perfOverlayOn = false;
   // FPS sampling for the rolling auto-detect window.
   private autoDetectAccum = 0;
@@ -36,8 +42,9 @@ export class HUDScene extends Phaser.Scene {
   private lastHp = -1;
   private hpFlashKind: 'heal' | 'damage' | null = null;
   private hpFlashTimer = 0;
-  // Deploy hint — small toast under the bottom-center when hovering the pad.
-  private deployText!: Phaser.GameObjects.Text;
+  // Bottom-center deploy hint (factory mode only). HTML overlay so it
+  // matches the rest of the chrome's typography.
+  private deployTextEl!: HTMLElement;
 
   constructor() {
     super({ key: 'HUDScene', active: false });
@@ -45,26 +52,17 @@ export class HUDScene extends Phaser.Scene {
 
   create(): void {
     this.overlay = new HUDOverlay(this);
+    this.toasts = new ToastManager(this);
+    this.achievementCallout = new AchievementCallout(this);
 
-    // Off-screen waypoint arrow lives in canvas space because it depends on
-    // RaidScene's camera scroll; keeping it as Phaser graphics is simpler.
-    this.waypoint = this.add.graphics();
-    this.waypoint.setScrollFactor(0).setDepth(2000).setVisible(false);
+    // Off-screen waypoint arrow — SVG triangle inside an HTML wrapper that
+    // we reposition + rotate each frame from RaidScene's camera scroll.
+    this.buildWaypoint();
 
-    // Bottom-center deploy hint (factory mode only). Cheap enough to keep
-    // as Phaser text; HUDOverlay doesn't need a slot for it.
-    this.deployText = this.add
-      .text(this.scale.width / 2, this.scale.height - 28, '', {
-        fontFamily: 'Rajdhani, sans-serif',
-        fontSize: '15px',
-        color: '#72ff9f',
-        stroke: '#000000',
-        strokeThickness: 3,
-      })
-      .setOrigin(0.5, 0)
-      .setScrollFactor(0)
-      .setDepth(2000)
-      .setVisible(false);
+    // Bottom-center deploy hint (factory mode only).
+    this.deployTextEl = nfrEl('div', 'nfr-hud-deploy-hint');
+    this.deployTextEl.style.display = 'none';
+    nfrUIOverlay.mountHud(this, this.deployTextEl);
 
     // MuteButton + Settings cog stay as Phaser widgets — they pre-date the
     // HTML overlay and their hit zones already work cleanly.
@@ -85,21 +83,11 @@ export class HUDScene extends Phaser.Scene {
     const keyboard = this.input.keyboard;
     if (keyboard) keyboard.on('keydown', unlock);
 
-    // M21 — performance overlay toggle (backtick). Pure dev tool; left in
-    // production but undocumented per §24.5.
-    this.perfOverlay = this.add
-      .text(this.scale.width - 12, this.scale.height - 12, '', {
-        fontFamily: 'JetBrains Mono, monospace',
-        fontSize: '11px',
-        color: '#88a0a8',
-        backgroundColor: '#0a1014',
-        padding: { x: 8, y: 6 },
-        align: 'right',
-      })
-      .setOrigin(1, 1)
-      .setScrollFactor(0)
-      .setDepth(2400)
-      .setVisible(false);
+    // M21 — performance overlay toggle (backtick). HTML overlay so it can
+    // pick up the JetBrains Mono font without re-rasterizing the canvas.
+    this.perfOverlayEl = nfrEl('div', 'nfr-hud-perf');
+    this.perfOverlayEl.style.display = 'none';
+    nfrUIOverlay.mountHud(this, this.perfOverlayEl);
     if (keyboard) {
       keyboard.on('keydown-BACKTICK', () => this.togglePerfOverlay());
       keyboard.on('keydown-ESC', () => {
@@ -108,85 +96,75 @@ export class HUDScene extends Phaser.Scene {
       });
     }
 
-    // M23 — achievement unlock toast bridge.
+    // M23 — achievement unlock callout bridge.
     bus.on(Events.ACHIEVEMENT_UNLOCKED, (...args: unknown[]) => {
       const id = args[0] as AchievementId | undefined;
       if (!id) return;
       const def = AchievementDefs[id];
       if (!def) return;
-      this.showAchievementToast(`${Strings.achievementUnlockedPrefix}${def.name}`);
-    });
-  }
-
-  private showAchievementToast(text: string): void {
-    const t = this.add
-      .text(this.scale.width / 2, 100, text, {
-        fontFamily: 'Orbitron, sans-serif',
-        fontSize: '17px',
-        color: '#ffd75a',
-        stroke: '#000000',
-        strokeThickness: 4,
-        backgroundColor: '#0a1014',
-        padding: { x: 14, y: 8 },
-      })
-      .setOrigin(0.5, 0)
-      .setScrollFactor(0)
-      .setDepth(2250)
-      .setAlpha(0);
-    this.tweens.add({
-      targets: t,
-      alpha: 1,
-      y: 120,
-      duration: 320,
-      ease: 'Cubic.easeOut',
-    });
-    this.time.delayedCall(3800, () => {
-      this.tweens.add({
-        targets: t,
-        alpha: 0,
-        duration: 500,
-        onComplete: () => t.destroy(),
-      });
+      this.achievementCallout.show(def.name);
     });
   }
 
   private togglePerfOverlay(): void {
     this.perfOverlayOn = !this.perfOverlayOn;
-    if (this.perfOverlay) this.perfOverlay.setVisible(this.perfOverlayOn);
+    if (this.perfOverlayEl) this.perfOverlayEl.style.display = this.perfOverlayOn ? 'block' : 'none';
   }
 
   private buildSettingsButton(): void {
-    const size = 22;
-    const padding = 12;
-    const x = this.scale.width - padding - size - 8 - size;
-    const y = padding;
-    const g = this.add.graphics().setScrollFactor(0).setDepth(2300);
-    g.setPosition(x + size / 2, y + size / 2);
-    g.fillStyle(0x101820, 0.85);
-    g.fillCircle(0, 0, size / 2);
-    g.lineStyle(1.5, 0xffffff, 0.85);
-    g.strokeCircle(0, 0, size / 2);
-    g.lineStyle(2, 0xffffff, 0.95);
-    for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * Math.PI * 2;
-      const inner = size / 2 - 5;
-      const outer = size / 2 + 2;
-      g.lineBetween(Math.cos(a) * inner, Math.sin(a) * inner, Math.cos(a) * outer, Math.sin(a) * outer);
-    }
-    g.lineStyle(1.5, 0xffffff, 0.85);
-    g.strokeCircle(0, 0, 4);
-    void g;
-
-    const hit = this.add
-      .zone(x, y, size, size)
-      .setOrigin(0, 0)
-      .setScrollFactor(0)
-      .setDepth(2300)
-      .setInteractive({ useHandCursor: true });
-    hit.on('pointerdown', () => {
+    // HTML+SVG gear button mounted in top-right (next to the mute button).
+    // The SVG keeps the previous radial-cog silhouette but renders crisply
+    // at any DPR and inherits the design-system colors.
+    const btn = nfrEl('button', 'nfr-hud-iconbtn nfr-hud-settings');
+    btn.type = 'button';
+    btn.setAttribute('aria-label', 'Settings');
+    btn.innerHTML = `
+      <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
+        <circle cx="11" cy="11" r="9" fill="#101820" fill-opacity="0.85" stroke="#ffffff" stroke-width="1.5" stroke-opacity="0.85"/>
+        <g stroke="#ffffff" stroke-width="2" stroke-opacity="0.95" stroke-linecap="round">
+          <line x1="11" y1="2.5" x2="11" y2="5.5"/>
+          <line x1="11" y1="16.5" x2="11" y2="19.5"/>
+          <line x1="2.5" y1="11" x2="5.5" y2="11"/>
+          <line x1="16.5" y1="11" x2="19.5" y2="11"/>
+          <line x1="5" y1="5" x2="7" y2="7"/>
+          <line x1="15" y1="15" x2="17" y2="17"/>
+          <line x1="17" y1="5" x2="15" y2="7"/>
+          <line x1="7" y1="15" x2="5" y2="17"/>
+        </g>
+        <circle cx="11" cy="11" r="4" fill="none" stroke="#ffffff" stroke-width="1.5" stroke-opacity="0.85"/>
+      </svg>
+    `;
+    btn.addEventListener('click', () => {
       if (this.settingsMenu.isOpen()) this.settingsMenu.close();
       else this.settingsMenu.open();
     });
+    nfrUIOverlay.mountHud(this, btn);
+  }
+
+  // Builds the off-screen waypoint arrow as an SVG element wrapped in an
+  // absolutely-positioned HTML node. drawWaypoint() repositions + rotates
+  // this node each frame; no Phaser graphics involved.
+  private buildWaypoint(): void {
+    const wrap = nfrEl('div', 'nfr-hud-waypoint');
+    wrap.style.display = 'none';
+    const svgNS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(svgNS, 'svg');
+    svg.setAttribute('viewBox', '-20 -16 40 32');
+    svg.setAttribute('width', '40');
+    svg.setAttribute('height', '32');
+    const poly = document.createElementNS(svgNS, 'polygon');
+    // Same triangle silhouette as the old Phaser version: tip at +x,
+    // notched butt at the rear.
+    poly.setAttribute('points', '16,0 -10,-11 -4,0 -10,11');
+    poly.setAttribute('fill', '#22f6ff');
+    poly.setAttribute('stroke', '#ffffff');
+    poly.setAttribute('stroke-width', '2');
+    poly.setAttribute('stroke-linejoin', 'round');
+    svg.appendChild(poly);
+    wrap.appendChild(svg);
+    nfrUIOverlay.mountHud(this, wrap);
+    this.waypointEl = wrap;
+    this.waypointPoly = poly;
   }
 
   override update(time: number, deltaMs: number): void {
@@ -223,39 +201,11 @@ export class HUDScene extends Phaser.Scene {
   }
 
   private showAutoQualityToast(text: string): void {
-    const t = this.add
-      .text(this.scale.width / 2, this.scale.height - 40, text, {
-        fontFamily: 'JetBrains Mono, monospace',
-        fontSize: '14px',
-        color: '#22f6ff',
-        stroke: '#000000',
-        strokeThickness: 3,
-        backgroundColor: '#0a1014',
-        padding: { x: 12, y: 6 },
-      })
-      .setOrigin(0.5, 1)
-      .setScrollFactor(0)
-      .setDepth(2350)
-      .setAlpha(0);
-    this.tweens.add({
-      targets: t,
-      alpha: 1,
-      y: this.scale.height - 60,
-      duration: 320,
-      ease: 'Cubic.easeOut',
-    });
-    this.time.delayedCall(3500, () => {
-      this.tweens.add({
-        targets: t,
-        alpha: 0,
-        duration: 500,
-        onComplete: () => t.destroy(),
-      });
-    });
+    this.toasts.show({ text, variant: 'info', duration: 3500 });
   }
 
   private renderPerfOverlay(fps: number): void {
-    if (!this.perfOverlay) return;
+    if (!this.perfOverlayEl) return;
     const raid = this.scene.get('RaidScene') as RaidScene | undefined;
     let enemyCount = 0;
     let pickupCount = 0;
@@ -280,12 +230,12 @@ export class HUDScene extends Phaser.Scene {
       `Qual:   ${preset.toUpperCase()}`,
       `DPRcap: ${dpr.toFixed(1)}`,
     ];
-    this.perfOverlay.setText(lines.join('\n'));
+    this.perfOverlayEl.textContent = lines.join('\n');
   }
 
   private renderRaid(raid: RaidScene): void {
     this.overlay.hideSpm();
-    this.deployText.setVisible(false);
+    if (this.deployTextEl) this.deployTextEl.style.display = 'none';
 
     const hpInfo = raid.getPlayerHP();
     const ratio = hpInfo.max > 0 ? Math.max(0, hpInfo.hp / hpInfo.max) : 0;
@@ -318,8 +268,8 @@ export class HUDScene extends Phaser.Scene {
     if (wp) {
       const color = wp.kind === 'powerup' ? Balance.colors.reward : Balance.colors.extraction;
       this.drawWaypoint(raid, wp.x, wp.y, color);
-    } else {
-      this.waypoint.setVisible(false);
+    } else if (this.waypointEl) {
+      this.waypointEl.style.display = 'none';
     }
 
     // Powerup pips
@@ -352,7 +302,7 @@ export class HUDScene extends Phaser.Scene {
     this.overlay.setGreed(0, false);
     this.overlay.setExtract(false);
     this.overlay.hideHp();
-    this.waypoint.setVisible(false);
+    if (this.waypointEl) this.waypointEl.style.display = 'none';
     this.overlay.setPips([], 0);
     this.overlay.setCleanse(null);
     void InfestationSystem;
@@ -365,21 +315,24 @@ export class HUDScene extends Phaser.Scene {
     this.overlay.setSpm(spm);
 
     const hold = factory.getDeployHoldRatio();
-    if (hold > 0) {
-      this.deployText.setText(Strings.factoryDeployHint);
-      this.deployText.setVisible(true);
-    } else {
-      this.deployText.setVisible(false);
+    if (this.deployTextEl) {
+      if (hold > 0) {
+        this.deployTextEl.textContent = Strings.factoryDeployHint;
+        this.deployTextEl.style.display = 'block';
+      } else {
+        this.deployTextEl.style.display = 'none';
+      }
     }
   }
 
   private clearRaidHud(): void {
     this.overlay.hideAllRaidElements();
-    this.waypoint.setVisible(false);
-    this.deployText.setVisible(false);
+    if (this.waypointEl) this.waypointEl.style.display = 'none';
+    if (this.deployTextEl) this.deployTextEl.style.display = 'none';
   }
 
   private drawWaypoint(raid: RaidScene, padX: number, padY: number, color: number = Balance.colors.extraction): void {
+    if (!this.waypointEl || !this.waypointPoly) return;
     const cam = raid.cameras.main;
     const viewW = this.scale.width;
     const viewH = this.scale.height;
@@ -393,7 +346,7 @@ export class HUDScene extends Phaser.Scene {
       padScreenY >= inset &&
       padScreenY <= viewH - inset
     ) {
-      this.waypoint.setVisible(false);
+      this.waypointEl.style.display = 'none';
       return;
     }
 
@@ -413,29 +366,19 @@ export class HUDScene extends Phaser.Scene {
     const ax = cx + cosA * t;
     const ay = cy + sinA * t;
 
-    const size = Balance.extraction.waypointSize;
-    const localPts: Array<[number, number]> = [
-      [size, 0],
-      [-size * 0.6, -size * 0.7],
-      [-size * 0.25, 0],
-      [-size * 0.6, size * 0.7],
-    ];
-    this.waypoint.clear();
-    this.waypoint.setVisible(true);
-    this.waypoint.fillStyle(color, 1);
-    this.waypoint.lineStyle(3, 0xffffff, 1);
-    this.waypoint.beginPath();
-    for (let i = 0; i < localPts.length; i++) {
-      const pt = localPts[i];
-      const lx = pt[0];
-      const ly = pt[1];
-      const sx = ax + lx * cosA - ly * sinA;
-      const sy = ay + lx * sinA + ly * cosA;
-      if (i === 0) this.waypoint.moveTo(sx, sy);
-      else this.waypoint.lineTo(sx, sy);
-    }
-    this.waypoint.closePath();
-    this.waypoint.fillPath();
-    this.waypoint.strokePath();
+    // Convert the (#RRGGBB) color int to a CSS hex string for the SVG fill.
+    const cssColor = '#' + color.toString(16).padStart(6, '0');
+    this.waypointPoly.setAttribute('fill', cssColor);
+
+    // Project the design-space arrow position into stage CSS pixels by
+    // applying the canvas display scale. UIOverlay already aligns the stage
+    // with the canvas, so the same conversion used by world-pin works here.
+    const canvasRect = this.game.canvas.getBoundingClientRect();
+    const cssScale = viewW > 0 ? canvasRect.width / viewW : 1;
+    const cssX = ax * cssScale;
+    const cssY = ay * cssScale;
+    const deg = (angle * 180) / Math.PI;
+    this.waypointEl.style.display = 'block';
+    this.waypointEl.style.transform = `translate(calc(${cssX.toFixed(1)}px - 50%), calc(${cssY.toFixed(1)}px - 50%)) rotate(${deg.toFixed(1)}deg)`;
   }
 }

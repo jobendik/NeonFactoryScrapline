@@ -12,6 +12,7 @@
 // shifts across builds without filtering by `v`.
 
 import { BUILD_VERSION, SESSION_START_MS } from './BuildInfo';
+import { SDKBridge } from './SDKBridge';
 
 interface CrazyGamesAnalyticsAPI {
   // v3 SDK methods may return a Promise that rejects in 'disabled' env
@@ -28,15 +29,16 @@ interface CrazyGamesSDKWithAnalytics {
 
 function getAnalyticsAPI(): CrazyGamesAnalyticsAPI | null {
   if (typeof window === 'undefined') return null;
+  // Only attempt SDK access when we know the SDK is connected and usable.
+  // Accessing SDK.analytics before init() completes causes the SDK to log
+  // a console warning even when our try/catch suppresses the throw.
+  if (!SDKBridge.isOnPlatform()) return null;
   try {
     const cg = (window as unknown as { CrazyGames?: { SDK?: CrazyGamesSDKWithAnalytics } })
       .CrazyGames;
     return cg?.SDK?.analytics ?? null;
   } catch {
-    // The CrazyGames SDK v3 `analytics` getter throws (rather than returning
-    // null/undefined) when accessed from an un-whitelisted domain or localhost.
-    // Swallow the error and treat the API as unavailable so callers fall back
-    // to the console.debug path instead of crashing.
+    // Swallow any remaining throw (e.g. SDK present but analytics unset).
     return null;
   }
 }

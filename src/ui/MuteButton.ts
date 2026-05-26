@@ -1,72 +1,101 @@
-import Phaser from 'phaser';
+import type Phaser from 'phaser';
 import { AudioBus } from '../audio/AudioBus';
+import { UIOverlay, el } from './overlay/UIOverlay';
 
 // Small circular mute toggle that lives in the top-right of the HUD. Click /
-// tap flips AudioBus.muted; the icon redraws to match. Lives on the HUDScene
-// so it persists across raid/factory transitions like the rest of the HUD.
+// tap flips AudioBus.muted; the icon redraws to match. HTML+SVG so it
+// matches the rest of the chrome instead of relying on Phaser graphics.
 
-const SIZE = 22;
-const PADDING = 12;
+const SVG_NS = 'http://www.w3.org/2000/svg';
 
 export class MuteButton {
-  private g: Phaser.GameObjects.Graphics;
-  private hit: Phaser.GameObjects.Zone;
+  private btn: HTMLButtonElement;
+  private waves: SVGGElement;
+  private slash: SVGLineElement;
 
   constructor(scene: Phaser.Scene) {
-    const x = scene.scale.width - PADDING - SIZE;
-    const y = PADDING;
-    this.g = scene.add.graphics();
-    this.g.setScrollFactor(0).setDepth(2300);
-    this.g.setPosition(x + SIZE / 2, y + SIZE / 2);
+    this.btn = el('button', 'nfr-hud-iconbtn nfr-hud-mute') as HTMLButtonElement;
+    this.btn.type = 'button';
+    this.btn.setAttribute('aria-label', 'Mute');
 
-    this.hit = scene.add.zone(x, y, SIZE, SIZE);
-    this.hit.setOrigin(0, 0);
-    this.hit.setScrollFactor(0);
-    this.hit.setDepth(2300);
-    this.hit.setInteractive({ useHandCursor: true });
-    this.hit.on('pointerdown', () => {
+    const svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('viewBox', '-11 -11 22 22');
+    svg.setAttribute('width', '22');
+    svg.setAttribute('height', '22');
+
+    const ring = document.createElementNS(SVG_NS, 'circle');
+    ring.setAttribute('cx', '0');
+    ring.setAttribute('cy', '0');
+    ring.setAttribute('r', '9');
+    ring.setAttribute('fill', '#101820');
+    ring.setAttribute('fill-opacity', '0.85');
+    ring.setAttribute('stroke', '#ffffff');
+    ring.setAttribute('stroke-width', '1.5');
+    ring.setAttribute('stroke-opacity', '0.85');
+    svg.appendChild(ring);
+
+    // Speaker glyph: body rect + cone polygon. Mirrors the prior canvas
+    // triangles so the silhouette doesn't shift between releases.
+    const body = document.createElementNS(SVG_NS, 'rect');
+    body.setAttribute('x', '-7');
+    body.setAttribute('y', '-3');
+    body.setAttribute('width', '4');
+    body.setAttribute('height', '6');
+    body.setAttribute('fill', '#ffffff');
+    svg.appendChild(body);
+    const cone = document.createElementNS(SVG_NS, 'polygon');
+    cone.setAttribute('points', '-3,-5 -3,5 3,7 3,-7');
+    cone.setAttribute('fill', '#ffffff');
+    svg.appendChild(cone);
+
+    // Sound waves shown when audio is on.
+    this.waves = document.createElementNS(SVG_NS, 'g');
+    const arc1 = document.createElementNS(SVG_NS, 'path');
+    arc1.setAttribute('d', 'M 4.5 -2.6 A 3 3 0 0 1 4.5 2.6');
+    arc1.setAttribute('fill', 'none');
+    arc1.setAttribute('stroke', '#ffffff');
+    arc1.setAttribute('stroke-width', '1.5');
+    arc1.setAttribute('stroke-opacity', '0.85');
+    arc1.setAttribute('stroke-linecap', 'round');
+    this.waves.appendChild(arc1);
+    const arc2 = document.createElementNS(SVG_NS, 'path');
+    arc2.setAttribute('d', 'M 6 -5.2 A 6 6 0 0 1 6 5.2');
+    arc2.setAttribute('fill', 'none');
+    arc2.setAttribute('stroke', '#ffffff');
+    arc2.setAttribute('stroke-width', '1.5');
+    arc2.setAttribute('stroke-opacity', '0.85');
+    arc2.setAttribute('stroke-linecap', 'round');
+    this.waves.appendChild(arc2);
+    svg.appendChild(this.waves);
+
+    // Diagonal slash overlay shown only when muted.
+    this.slash = document.createElementNS(SVG_NS, 'line');
+    this.slash.setAttribute('x1', '-9');
+    this.slash.setAttribute('y1', '-9');
+    this.slash.setAttribute('x2', '9');
+    this.slash.setAttribute('y2', '9');
+    this.slash.setAttribute('stroke', '#ff416b');
+    this.slash.setAttribute('stroke-width', '2');
+    this.slash.setAttribute('stroke-linecap', 'round');
+    svg.appendChild(this.slash);
+
+    this.btn.appendChild(svg);
+    this.btn.addEventListener('click', () => {
       AudioBus.toggleMute();
       this.redraw();
     });
 
+    UIOverlay.mountHud(scene, this.btn);
     this.redraw();
   }
 
-  // Updates the icon to a speaker (audio on) or speaker-with-slash (muted).
   redraw(): void {
     const muted = AudioBus.isMuted();
-    const g = this.g;
-    g.clear();
-    const r = SIZE / 2 - 2;
-    g.fillStyle(0x101820, 0.85);
-    g.fillCircle(0, 0, r + 2);
-    g.lineStyle(1.5, 0xffffff, 0.85);
-    g.strokeCircle(0, 0, r + 2);
-
-    // Speaker body
-    g.fillStyle(0xffffff, 1);
-    g.fillRect(-7, -3, 4, 6);
-    g.fillTriangle(-3, -5, -3, 5, 3, 7);
-    g.fillTriangle(-3, -5, -3, 5, 3, -7);
-
-    if (muted) {
-      // Diagonal slash to indicate muted.
-      g.lineStyle(2, 0xff416b, 1);
-      g.lineBetween(-r - 2, -r - 2, r + 2, r + 2);
-    } else {
-      // Two sound waves to the right.
-      g.lineStyle(1.5, 0xffffff, 0.85);
-      g.beginPath();
-      g.arc(3, 0, 3, -Math.PI / 3, Math.PI / 3);
-      g.strokePath();
-      g.beginPath();
-      g.arc(3, 0, 6, -Math.PI / 3, Math.PI / 3);
-      g.strokePath();
-    }
+    this.waves.style.display = muted ? 'none' : '';
+    this.slash.style.display = muted ? '' : 'none';
   }
 
   destroy(): void {
-    this.g.destroy();
-    this.hit.destroy();
+    this.btn.remove();
   }
 }

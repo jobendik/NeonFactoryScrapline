@@ -28,6 +28,7 @@ import { ensureCommonFX, applyGlow, FACTORY_BG_KEY, VIGNETTE_KEY } from '../syst
 import { RetentionSystem } from '../systems/RetentionSystem';
 import { WelcomeBack } from '../ui/WelcomeBack';
 import { UIOverlay as nfrUIOverlay, el as nfrEl } from '../ui/overlay/UIOverlay';
+import { ToastManager as NfrToastManager } from '../ui/overlay/ToastManager';
 import { RaidZoneSystem } from '../systems/RaidZoneSystem';
 
 // HTML factory for one button in the left-edge action column. The variant
@@ -67,9 +68,8 @@ export class FactoryScene extends Phaser.Scene {
   private padX = Balance.factory.deployPad.x;
   private padY = Balance.factory.deployPad.y;
   private padRadius = Balance.factory.deployPad.radius;
-  private padBase!: Phaser.GameObjects.Graphics;
-  private padFill!: Phaser.GameObjects.Graphics;
-  private zoneLabel: Phaser.GameObjects.Text | null = null;
+  private padFillArc: SVGCircleElement | null = null;
+  private padFillCircumference = 0;
   private deployHold = 0;
   private deployState: DeployState = 'idle';
   private drones: Drone[] = [];
@@ -82,17 +82,26 @@ export class FactoryScene extends Phaser.Scene {
   private ambientDecor: Phaser.GameObjects.GameObject[] = [];
   // Pulsing "DEPLOY" prompt that appears the first time a post-tutorial player
   // returns to the factory and has bought Gen Lv. 2. Cleared once they walk on
-  // the pad or once raidsCompleted advances past 1.
-  private deployPrompt: Phaser.GameObjects.Text | null = null;
-  private deployPromptTween: Phaser.Tweens.Tween | null = null;
-  // M16 operator picker: rendered to the left of the deploy pad. Each entry
-  // owns its own Phaser game objects so we can refresh state on click.
-  private operatorPanelObjects: Phaser.GameObjects.GameObject[] = [];
-  // M18 — quest panel handles, rebuilt on claim or raid-return.
-  private questPanelObjects: Phaser.GameObjects.GameObject[] = [];
+  // the pad or once raidsCompleted advances past 1. HTML element pinned to
+  // the pad's world position via the worldPins projection.
+  private deployPromptEl: HTMLElement | null = null;
+  // Pad-anchored HTML widgets (deploy hint + zone label + DAILY SEED button).
+  private padHintEl: HTMLElement | null = null;
+  private zoneLabelEl: HTMLElement | null = null;
+  // World-pinned HTML overlays: positions updated each frame from the camera
+  // so they look glued to a world coordinate (deploy pad, machine labels).
+  private worldPins: Array<{ el: HTMLElement; worldX: number; worldY: number }> = [];
+  private toastMgr: NfrToastManager | null = null;
+  // M16 operator picker — HTML overlay row docked along the bottom of the
+  // canvas. Dismiss the previous mount before rebuilding on state change.
+  private operatorPanelDismiss: (() => void) | null = null;
+  // M18 — quest panel HTML overlay, rebuilt on claim or raid-return.
+  private questPanelDismiss: (() => void) | null = null;
   // M19 — daily seed deploy button + leaderboard button + leaderboard modal.
-  private dailySeedObjects: Phaser.GameObjects.GameObject[] = [];
-  private leaderboardObjects: Phaser.GameObjects.GameObject[] = [];
+  // dailySeedObjects holds disposable handles ({destroy}) so the existing
+  // teardown helper keeps working; HTML overlays push a dismiss adapter.
+  private dailySeedObjects: Array<{ destroy: () => void }> = [];
+  private leaderboardObjects: Array<{ destroy: () => void }> = [];
   // M20 — rewarded-ad panel (FACTORY BOOST + CLEAR INFESTATION + DAILY CRATE).
   // Sits on the left edge below the FPS counter. Refreshed on any state
   // change (boost activated, infestation cleared, daily crate claimed) and
@@ -104,8 +113,7 @@ export class FactoryScene extends Phaser.Scene {
   private adPanelLastSecond = -1;
   private factoryBoostBtn: HTMLButtonElement | null = null;
   // Pinned try-out toast (shown briefly after the player accepts the
-  // OPERATOR TRY-OUT ad). Destroyed automatically.
-  private tryOutToast: Phaser.GameObjects.Text | null = null;
+  // OPERATOR TRY-OUT ad). HTML element + dismiss fn.
   private onUpgradePurchased = (..._args: unknown[]): void => this.handleUpgradePurchased();
 
   constructor() {
@@ -174,31 +182,46 @@ export class FactoryScene extends Phaser.Scene {
       save.upgrades.gen >= 2 &&
       save.raidsCompleted <= 1;
 
-    if (want && !this.deployPrompt) {
-      this.deployPrompt = this.add
-        .text(this.padX, this.padY - this.padRadius - 24, Strings.ftueDeployPrompt, {
-          fontFamily: 'monospace',
-          fontSize: '34px',
-          color: '#72ff9f',
-          stroke: '#000000',
-          strokeThickness: 4,
-        })
-        .setOrigin(0.5, 1)
-        .setDepth(3);
-      this.deployPromptTween = this.tweens.add({
-        targets: this.deployPrompt,
-        scale: { from: 1, to: 1.18 },
-        alpha: { from: 1, to: 0.7 },
-        duration: 520,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut',
-      });
-    } else if (!want && this.deployPrompt) {
-      this.deployPromptTween?.stop();
-      this.deployPromptTween = null;
-      this.deployPrompt.destroy();
-      this.deployPrompt = null;
+    if (want && !this.deployPromptEl) {
+      this.deployPromptEl = nfrEl('div', 'nfr-pad-deploy-prompt');
+      this.deployPromptEl.textContent = Strings.ftueDeployPrompt;
+      this.pinHtmlToWorld(this.deployPromptEl, this.padX, this.padY - this.padRadius - 56);
+    } else if (!want && this.deployPromptEl) {
+      this.unpinHtmlFromWorld(this.deployPromptEl);
+      this.deployPromptEl = null;
+    }
+  }
+
+  // ---- world-pinned HTML overlay helpers ----
+  // mountHud + a per-frame transform pin lets us position any HTML node at
+  // a fixed world coordinate (so it scrolls with the camera the same way
+  // a Phaser world-space text would, but using real CSS rendering).
+  private pinHtmlToWorld(el: HTMLElement, worldX: number, worldY: number): void {
+    el.classList.add('nfr-worldpin');
+    nfrUIOverlay.mountHud(this, el);
+    this.worldPins.push({ el, worldX, worldY });
+    this.applyWorldPin(el, worldX, worldY);
+  }
+
+  private unpinHtmlFromWorld(el: HTMLElement): void {
+    const idx = this.worldPins.findIndex(p => p.el === el);
+    if (idx >= 0) this.worldPins.splice(idx, 1);
+    el.remove();
+  }
+
+  private applyWorldPin(el: HTMLElement, worldX: number, worldY: number): void {
+    const cam = this.cameras.main;
+    const designW = this.scale.width;
+    const canvasRect = this.game.canvas.getBoundingClientRect();
+    const cssScale = designW > 0 ? canvasRect.width / designW : 1;
+    const sx = (worldX - cam.scrollX) * cam.zoom * cssScale;
+    const sy = (worldY - cam.scrollY) * cam.zoom * cssScale;
+    el.style.transform = `translate(calc(${sx.toFixed(1)}px - 50%), calc(${sy.toFixed(1)}px - 50%))`;
+  }
+
+  private tickWorldPins(): void {
+    for (const pin of this.worldPins) {
+      this.applyWorldPin(pin.el, pin.worldX, pin.worldY);
     }
   }
 
@@ -248,6 +271,7 @@ export class FactoryScene extends Phaser.Scene {
 
     this.tickDeployPad(dt);
     this.tickAdPanel();
+    this.tickWorldPins();
   }
 
   shutdown(): void {
@@ -267,18 +291,18 @@ export class FactoryScene extends Phaser.Scene {
     this.milestoneVisuals = [];
     for (const v of this.ambientDecor) v.destroy();
     this.ambientDecor = [];
-    this.deployPromptTween?.stop();
-    this.deployPromptTween = null;
-    this.deployPrompt?.destroy();
-    this.deployPrompt = null;
-    this.zoneLabel?.destroy();
-    this.zoneLabel = null;
+    // Tear down all world-pinned HTML overlays (they're managed via mountHud
+    // but we also remove them from the pin list so the next scene start is
+    // clean).
+    for (const pin of this.worldPins) pin.el.remove();
+    this.worldPins = [];
+    this.deployPromptEl = null;
+    this.padHintEl = null;
+    this.zoneLabelEl = null;
     this.destroyOperatorPanel();
     this.destroyQuestPanel();
     this.destroyDailySeedAndLeaderboard();
     this.destroyAdPanel();
-    this.tryOutToast?.destroy();
-    this.tryOutToast = null;
   }
 
   // ---- accessors used by HUDScene ----
@@ -422,19 +446,32 @@ export class FactoryScene extends Phaser.Scene {
     const save = saveSystem.get();
     const gen = save.upgrades.gen;
     const magnet = save.upgrades.magnet;
+    const wb = Balance.player.worldBounds;
+    const worldW = wb.maxX - wb.minX;
+    const worldH = wb.maxY - wb.minY;
+
+    // Helper: bake a Graphics into a world-size RT, tag as milestone.
+    const bakeMilestone = (depth: number, draw: (g: Phaser.GameObjects.Graphics) => void): Phaser.GameObjects.RenderTexture => {
+      const rt = this.add.renderTexture(0, 0, worldW, worldH).setOrigin(0, 0).setDepth(depth);
+      const g = this.add.graphics();
+      draw(g);
+      rt.draw(g, -wb.minX, -wb.minY);
+      g.destroy();
+      rt.setPosition(wb.minX, wb.minY);
+      rt.setData('milestone', true);
+      return rt;
+    };
 
     // Gen Lv. 3: conveyor belts connect generators (placeholder line strip).
     if (gen >= 3 && this.generators.length >= 2) {
       const a = this.generators[0];
       const b = this.generators[1];
-      const belt = this.add.graphics();
-      belt.setDepth(1);
-      belt.lineStyle(8, 0x202a3a, 1);
-      belt.lineBetween(a.x, a.y, b.x, b.y);
-      belt.lineStyle(2, 0x22f6ff, 0.5);
-      belt.lineBetween(a.x, a.y, b.x, b.y);
-      belt.setData('milestone', true);
-      this.milestoneVisuals.push(belt);
+      this.milestoneVisuals.push(bakeMilestone(1, g => {
+        g.lineStyle(8, 0x202a3a, 1);
+        g.lineBetween(a.x, a.y, b.x, b.y);
+        g.lineStyle(2, 0x22f6ff, 0.5);
+        g.lineBetween(a.x, a.y, b.x, b.y);
+      }));
     }
 
     // Gen Lv. 5: factory expands - zoom camera out slightly.
@@ -442,40 +479,28 @@ export class FactoryScene extends Phaser.Scene {
 
     // Gen Lv. 10: reactor core in center (labeled placeholder).
     if (gen >= 10) {
-      const reactor = this.add.rectangle(0, 0, 80, 80, 0xffd75a, 0.35);
-      reactor.setStrokeStyle(2, 0xffd75a, 0.85);
-      reactor.setDepth(1);
-      reactor.setData('milestone', true);
-      this.milestoneVisuals.push(reactor);
-      const label = this.add
-        .text(0, 0, 'REACTOR', {
-          fontFamily: 'monospace',
-          fontSize: '12px',
-          color: '#ffd75a',
-        })
-        .setOrigin(0.5)
-        .setDepth(2);
-      label.setData('milestone', true);
-      this.milestoneVisuals.push(label);
+      this.milestoneVisuals.push(bakeMilestone(1, g => {
+        g.fillStyle(0xffd75a, 0.35);
+        g.fillRect(-40, -40, 80, 80);
+        g.lineStyle(2, 0xffd75a, 0.85);
+        g.strokeRect(-40, -40, 80, 80);
+      }));
+      const reactorLabel = nfrEl('div', 'nfr-machine-label gold');
+      reactorLabel.textContent = 'REACTOR';
+      this.pinHtmlToWorld(reactorLabel, 0, 0);
     }
 
     // Magnet Lv. 3+: visible coil pillar (placeholder).
     if (magnet >= 3) {
-      const coil = this.add.rectangle(-200, 220, 40, 60, 0x22f6ff, 0.55);
-      coil.setStrokeStyle(2, 0x22f6ff, 0.9);
-      coil.setDepth(1);
-      coil.setData('milestone', true);
-      this.milestoneVisuals.push(coil);
-      const label = this.add
-        .text(-200, 260, 'COIL', {
-          fontFamily: 'monospace',
-          fontSize: '10px',
-          color: '#22f6ff',
-        })
-        .setOrigin(0.5)
-        .setDepth(2);
-      label.setData('milestone', true);
-      this.milestoneVisuals.push(label);
+      this.milestoneVisuals.push(bakeMilestone(1, g => {
+        g.fillStyle(0x22f6ff, 0.55);
+        g.fillRect(-220, 190, 40, 60);
+        g.lineStyle(2, 0x22f6ff, 0.9);
+        g.strokeRect(-220, 190, 40, 60);
+      }));
+      const coilLabel = nfrEl('div', 'nfr-machine-label cyan');
+      coilLabel.textContent = 'COIL';
+      this.pinHtmlToWorld(coilLabel, -200, 260);
     }
   }
 
@@ -539,26 +564,33 @@ export class FactoryScene extends Phaser.Scene {
     void worldFloor;
 
     const themeColor = CosmeticSystem.getEquippedThemeColor() || Balance.colors.background;
-    const grid = this.add.graphics();
-    grid.lineStyle(1, themeColor, 0.22);
+    // Bake grid + bounds into RenderTextures — no persistent Graphics objects.
     const step = Balance.ui.gridStep;
+    const rtGrid = this.add.renderTexture(0, 0, worldW, worldH).setOrigin(0, 0).setDepth(-10);
+    const gGrid = this.add.graphics();
+    gGrid.lineStyle(1, themeColor, 0.22);
     for (let x = wb.minX; x <= wb.maxX; x += step) {
-      grid.moveTo(x, wb.minY);
-      grid.lineTo(x, wb.maxY);
+      gGrid.moveTo(x, wb.minY);
+      gGrid.lineTo(x, wb.maxY);
     }
     for (let y = wb.minY; y <= wb.maxY; y += step) {
-      grid.moveTo(wb.minX, y);
-      grid.lineTo(wb.maxX, y);
+      gGrid.moveTo(wb.minX, y);
+      gGrid.lineTo(wb.maxX, y);
     }
-    grid.strokePath();
-    grid.setDepth(-10);
+    gGrid.strokePath();
+    rtGrid.draw(gGrid, -wb.minX, -wb.minY);
+    gGrid.destroy();
+    rtGrid.setPosition(wb.minX, wb.minY);
 
-    // Glowing arena frame so the factory's bounds read clearly.
-    const bounds = this.add.graphics();
-    bounds.lineStyle(3, themeColor, 0.85);
-    bounds.strokeRect(wb.minX, wb.minY, worldW, worldH);
-    bounds.setDepth(-8);
-    applyGlow(bounds, themeColor, 5, 0);
+    // Glowing arena frame — baked into RT so applyGlow works on the sprite.
+    const rtBounds = this.add.renderTexture(0, 0, worldW, worldH).setOrigin(0, 0).setDepth(-8);
+    const gBounds = this.add.graphics();
+    gBounds.lineStyle(3, themeColor, 0.85);
+    gBounds.strokeRect(wb.minX, wb.minY, worldW, worldH);
+    rtBounds.draw(gBounds, -wb.minX, -wb.minY);
+    gBounds.destroy();
+    rtBounds.setPosition(wb.minX, wb.minY);
+    applyGlow(rtBounds, themeColor, 5, 0);
 
     // Vignette overlay focuses attention on the player.
     const vignette = this.add
@@ -576,112 +608,119 @@ export class FactoryScene extends Phaser.Scene {
   //   -5 → loading-bay hazard stripes (floor decals above grid)
   //    0 → upright props (pipes, idle chassis) — below generators (2)
   //
-  // All graphics are single Phaser.Graphics nodes so the cost is one draw
-  // per layer regardless of how many segments / brackets render.
+  // Each layer is baked into a RenderTexture (draw once, render as sprite)
+  // so there are no persistent Graphics objects on the display list.
   private drawAmbientDecor(): void {
     const wb = Balance.player.worldBounds;
+    const worldW = wb.maxX - wb.minX;
+    const worldH = wb.maxY - wb.minY;
     const themeColor = Balance.colors.background; // cyan accent
     const slate = 0x101820;
     const dim = 0x182838;
 
+    // Helper: bake a Graphics into a fixed-size RT covering world bounds.
+    const bake = (depth: number, draw: (g: Phaser.GameObjects.Graphics) => void): Phaser.GameObjects.RenderTexture => {
+      const rt = this.add.renderTexture(0, 0, worldW, worldH).setOrigin(0, 0).setDepth(depth);
+      const g = this.add.graphics();
+      draw(g);
+      rt.draw(g, -wb.minX, -wb.minY);
+      g.destroy();
+      rt.setPosition(wb.minX, wb.minY);
+      return rt;
+    };
+
     // --- Wall panels along the far left/right edges. Periodic rectangles
     //     with a cyan accent stripe at the bottom so they read as
     //     industrial cabinets rather than solid walls. ---
-    const walls = this.add.graphics().setDepth(-7);
     const wallHeight = 110;
     const wallWidth = 24;
     const wallStep = 180;
     const wallStartY = wb.minY + 70;
-    walls.fillStyle(dim, 0.9);
-    for (let y = wallStartY; y < wb.maxY - 80; y += wallStep) {
-      walls.fillRect(wb.minX + 12, y, wallWidth, wallHeight);
-      walls.fillRect(wb.maxX - 12 - wallWidth, y, wallWidth, wallHeight);
-    }
-    walls.fillStyle(themeColor, 0.45);
-    for (let y = wallStartY; y < wb.maxY - 80; y += wallStep) {
-      walls.fillRect(wb.minX + 12, y + wallHeight - 4, wallWidth, 3);
-      walls.fillRect(wb.maxX - 12 - wallWidth, y + wallHeight - 4, wallWidth, 3);
-    }
-    this.ambientDecor.push(walls);
+    this.ambientDecor.push(bake(-7, g => {
+      g.fillStyle(dim, 0.9);
+      for (let y = wallStartY; y < wb.maxY - 80; y += wallStep) {
+        g.fillRect(wb.minX + 12, y, wallWidth, wallHeight);
+        g.fillRect(wb.maxX - 12 - wallWidth, y, wallWidth, wallHeight);
+      }
+      g.fillStyle(themeColor, 0.45);
+      for (let y = wallStartY; y < wb.maxY - 80; y += wallStep) {
+        g.fillRect(wb.minX + 12, y + wallHeight - 4, wallWidth, 3);
+        g.fillRect(wb.maxX - 12 - wallWidth, y + wallHeight - 4, wallWidth, 3);
+      }
+    }));
 
     // --- Cable conduits: dim trunks routed from each generator slot to the
     //     deploy pad, with a thinner cyan trace on top so power feels
     //     "live". Uses generatorPositions (not the spawned generators) so
     //     the cables exist even when later slots are still locked. ---
-    const cables = this.add.graphics().setDepth(-6);
-    const drawCableRun = (lineColor: number, lineAlpha: number, width: number): void => {
-      cables.lineStyle(width, lineColor, lineAlpha);
+    const drawCableRun = (g: Phaser.GameObjects.Graphics, lineColor: number, lineAlpha: number, width: number): void => {
+      g.lineStyle(width, lineColor, lineAlpha);
       for (const gpos of Balance.factory.generatorPositions) {
-        cables.beginPath();
-        cables.moveTo(gpos.x + Balance.factory.generatorSize / 2, gpos.y);
-        cables.lineTo(0, gpos.y);
-        cables.lineTo(0, 0);
-        cables.lineTo(this.padX - this.padRadius - 6, 0);
-        cables.strokePath();
+        g.beginPath();
+        g.moveTo(gpos.x + Balance.factory.generatorSize / 2, gpos.y);
+        g.lineTo(0, gpos.y);
+        g.lineTo(0, 0);
+        g.lineTo(this.padX - this.padRadius - 6, 0);
+        g.strokePath();
       }
     };
-    drawCableRun(slate, 1, 5);
-    drawCableRun(themeColor, 0.55, 2);
-    // Junction nodes at the bends so the cable run reads as routed.
-    cables.fillStyle(themeColor, 0.75);
-    for (const gpos of Balance.factory.generatorPositions) {
-      cables.fillCircle(0, gpos.y, 4);
-    }
-    cables.fillCircle(0, 0, 5);
-    this.ambientDecor.push(cables);
+    this.ambientDecor.push(bake(-6, g => {
+      drawCableRun(g, slate, 1, 5);
+      drawCableRun(g, themeColor, 0.55, 2);
+      // Junction nodes at the bends so the cable run reads as routed.
+      g.fillStyle(themeColor, 0.75);
+      for (const gpos of Balance.factory.generatorPositions) {
+        g.fillCircle(0, gpos.y, 4);
+      }
+      g.fillCircle(0, 0, 5);
+    }));
 
     // --- Loading-bay hazard stripes around the deploy pad. A box of
     //     diagonal yellow trapezoids cropped to leave the pad circle
     //     unobstructed so the player's eye still locks onto the pad. ---
-    const stripes = this.add.graphics().setDepth(-5);
-    stripes.fillStyle(0xffd75a, 0.10);
     const bayHalf = 150;
     const stripeW = 18;
     const stripeGap = 16;
     const bayLeft = this.padX - bayHalf;
     const bayTop = this.padY - bayHalf;
     const bayBottom = this.padY + bayHalf;
-    for (let i = -6; i < 18; i++) {
-      const x0 = bayLeft + i * (stripeW + stripeGap);
-      stripes.beginPath();
-      stripes.moveTo(x0, bayTop);
-      stripes.lineTo(x0 + stripeW, bayTop);
-      stripes.lineTo(x0 + stripeW + (bayBottom - bayTop), bayBottom);
-      stripes.lineTo(x0 + (bayBottom - bayTop), bayBottom);
-      stripes.closePath();
-      stripes.fillPath();
-    }
-    // Punch out the pad circle so the stripes don't fight the deploy ring.
-    // We can't subtract from a Graphics path in Phaser easily, so we draw
-    // a dark disc on top at the same depth — visually equivalent.
-    stripes.fillStyle(parseInt(Balance.factory.backgroundColor.slice(1), 16), 1);
-    stripes.fillCircle(this.padX, this.padY, this.padRadius + 6);
-    this.ambientDecor.push(stripes);
+    this.ambientDecor.push(bake(-5, g => {
+      g.fillStyle(0xffd75a, 0.10);
+      for (let i = -6; i < 18; i++) {
+        const x0 = bayLeft + i * (stripeW + stripeGap);
+        g.beginPath();
+        g.moveTo(x0, bayTop);
+        g.lineTo(x0 + stripeW, bayTop);
+        g.lineTo(x0 + stripeW + (bayBottom - bayTop), bayBottom);
+        g.lineTo(x0 + (bayBottom - bayTop), bayBottom);
+        g.closePath();
+        g.fillPath();
+      }
+    }));
 
     // --- Top + bottom pipe runs spanning the full world width. Slate
     //     trunk with a cyan inner trace and periodic bracket dots so the
     //     pipe reads as fastened to the wall. ---
-    const pipes = this.add.graphics().setDepth(0);
     const pipeTopY = wb.minY + 34;
     const pipeBotY = wb.maxY - 34;
-    pipes.lineStyle(10, slate, 1);
-    pipes.lineBetween(wb.minX + 50, pipeTopY, wb.maxX - 50, pipeTopY);
-    pipes.lineBetween(wb.minX + 50, pipeBotY, wb.maxX - 50, pipeBotY);
-    pipes.lineStyle(2.5, themeColor, 0.55);
-    pipes.lineBetween(wb.minX + 50, pipeTopY, wb.maxX - 50, pipeTopY);
-    pipes.lineBetween(wb.minX + 50, pipeBotY, wb.maxX - 50, pipeBotY);
-    pipes.fillStyle(themeColor, 0.7);
-    for (let x = wb.minX + 90; x < wb.maxX - 70; x += 130) {
-      pipes.fillCircle(x, pipeTopY, 4);
-      pipes.fillCircle(x, pipeBotY, 4);
-    }
-    this.ambientDecor.push(pipes);
+    this.ambientDecor.push(bake(0, g => {
+      g.lineStyle(10, slate, 1);
+      g.lineBetween(wb.minX + 50, pipeTopY, wb.maxX - 50, pipeTopY);
+      g.lineBetween(wb.minX + 50, pipeBotY, wb.maxX - 50, pipeBotY);
+      g.lineStyle(2.5, themeColor, 0.55);
+      g.lineBetween(wb.minX + 50, pipeTopY, wb.maxX - 50, pipeTopY);
+      g.lineBetween(wb.minX + 50, pipeBotY, wb.maxX - 50, pipeBotY);
+      g.fillStyle(themeColor, 0.7);
+      for (let x = wb.minX + 90; x < wb.maxX - 70; x += 130) {
+        g.fillCircle(x, pipeTopY, 4);
+        g.fillCircle(x, pipeBotY, 4);
+      }
+    }));
 
     // --- Idle chassis: 6 non-functional placeholder machine boxes in the
     //     dead zones so the workshop has neighbours. Distinct from the
     //     real Generator entity (different color + size) so the player
     //     doesn't mistake them for upgradeable hardware. ---
-    const chassis = this.add.graphics().setDepth(0);
     const chassisSpots: Array<{ x: number; y: number; w: number; h: number }> = [
       { x: -650, y: -350, w: 80, h: 56 },
       { x: -650, y: 360, w: 80, h: 56 },
@@ -690,77 +729,79 @@ export class FactoryScene extends Phaser.Scene {
       { x: 660, y: -350, w: 80, h: 56 },
       { x: 660, y: 360, w: 80, h: 56 },
     ];
-    for (const s of chassisSpots) {
-      const hx = s.x - s.w / 2;
-      const hy = s.y - s.h / 2;
-      chassis.fillStyle(slate, 0.9);
-      chassis.fillRoundedRect(hx, hy, s.w, s.h, 6);
-      chassis.lineStyle(1.5, themeColor, 0.5);
-      chassis.strokeRoundedRect(hx, hy, s.w, s.h, 6);
-      // Status LED — desaturated so it reads as "standby" rather than active.
-      chassis.fillStyle(themeColor, 0.4);
-      chassis.fillCircle(s.x, s.y - s.h / 2 + 6, 2);
-      // Inner panel inset for a bit of texture.
-      chassis.lineStyle(1, themeColor, 0.22);
-      chassis.strokeRect(hx + 6, hy + 12, s.w - 12, s.h - 18);
-    }
-    this.ambientDecor.push(chassis);
+    this.ambientDecor.push(bake(0, g => {
+      for (const s of chassisSpots) {
+        const hx = s.x - s.w / 2;
+        const hy = s.y - s.h / 2;
+        g.fillStyle(slate, 0.9);
+        g.fillRoundedRect(hx, hy, s.w, s.h, 6);
+        g.lineStyle(1.5, themeColor, 0.5);
+        g.strokeRoundedRect(hx, hy, s.w, s.h, 6);
+        // Status LED — desaturated so it reads as "standby" rather than active.
+        g.fillStyle(themeColor, 0.4);
+        g.fillCircle(s.x, s.y - s.h / 2 + 6, 2);
+        // Inner panel inset for a bit of texture.
+        g.lineStyle(1, themeColor, 0.22);
+        g.strokeRect(hx + 6, hy + 12, s.w - 12, s.h - 18);
+      }
+    }));
   }
 
   private drawPad(): void {
-    this.padBase = this.add.graphics();
-    this.padBase.setDepth(2);
-    this.padBase.fillStyle(Balance.colors.extraction, 0.14);
-    this.padBase.fillCircle(this.padX, this.padY, this.padRadius);
-    this.padBase.lineStyle(3, Balance.colors.extraction, 0.85);
-    this.padBase.strokeCircle(this.padX, this.padY, this.padRadius);
-    this.padBase.lineStyle(1, Balance.colors.extraction, 0.4);
-    this.padBase.strokeCircle(this.padX, this.padY, this.padRadius * 0.55);
+    // Pad base: SVG circle pinned to world position via worldPins.
+    const cx = '#' + Balance.colors.extraction.toString(16).padStart(6, '0');
+    const r = this.padRadius;
+    const d = (r + 6) * 2;
+    const padBaseEl = nfrEl('div', 'nfr-worldpin nfr-pad-base');
+    padBaseEl.innerHTML =
+      `<svg width="${d}" height="${d}" viewBox="${-r - 6} ${-r - 6} ${d} ${d}" xmlns="http://www.w3.org/2000/svg">` +
+      `<circle cx="0" cy="0" r="${r}" fill="${cx}" fill-opacity="0.14" stroke="${cx}" stroke-width="3" stroke-opacity="0.85"/>` +
+      `<circle cx="0" cy="0" r="${r * 0.55}" fill="none" stroke="${cx}" stroke-width="1" stroke-opacity="0.4"/>` +
+      `</svg>`;
+    this.pinHtmlToWorld(padBaseEl, this.padX, this.padY);
 
-    this.padFill = this.add.graphics();
-    this.padFill.setDepth(3);
+    // Pad fill arc: SVG stroke-dashoffset arc, updated each frame in drawPadFill.
+    const r2 = r * 0.82;
+    this.padFillCircumference = 2 * Math.PI * r2;
+    const d2 = (r2 + 8) * 2;
+    const padFillEl = nfrEl('div', 'nfr-worldpin nfr-pad-fill');
+    padFillEl.innerHTML =
+      `<svg width="${d2}" height="${d2}" viewBox="${-r2 - 8} ${-r2 - 8} ${d2} ${d2}" xmlns="http://www.w3.org/2000/svg">` +
+      `<circle cx="0" cy="0" r="${r2}" fill="none" stroke="${cx}" stroke-width="6"` +
+      ` stroke-dasharray="${this.padFillCircumference} ${this.padFillCircumference}"` +
+      ` stroke-dashoffset="${this.padFillCircumference}" transform="rotate(-90 0 0)"/>` +
+      `</svg>`;
+    this.padFillArc = padFillEl.querySelector('circle') as SVGCircleElement;
+    this.pinHtmlToWorld(padFillEl, this.padX, this.padY);
 
-    this.add
-      .text(this.padX, this.padY + this.padRadius + 18, Strings.factoryDeployHint, {
-        fontFamily: 'monospace',
-        fontSize: '14px',
-        color: '#72ff9f',
-        stroke: '#000000',
-        strokeThickness: 3,
-      })
-      .setOrigin(0.5, 0)
-      .setDepth(3);
+    // Deploy hint + zone label are HTML overlays pinned to the pad's world
+    // position. Updated each frame in tickWorldPins() so they track camera
+    // scroll without leaning on Phaser text rendering.
+    this.padHintEl = nfrEl('div', 'nfr-pad-hint');
+    this.padHintEl.textContent = Strings.factoryDeployHint;
+    this.pinHtmlToWorld(this.padHintEl, this.padX, this.padY + this.padRadius + 18);
 
-    this.zoneLabel = this.add
-      .text(this.padX, this.padY - this.padRadius - 42, '', {
-        fontFamily: 'monospace',
-        fontSize: '13px',
-        color: '#ffd75a',
-        stroke: '#000000',
-        strokeThickness: 3,
-      })
-      .setOrigin(0.5, 1)
-      .setDepth(3);
+    this.zoneLabelEl = nfrEl('div', 'nfr-pad-zone');
+    this.pinHtmlToWorld(this.zoneLabelEl, this.padX, this.padY - this.padRadius - 30);
     this.refreshZoneLabel();
   }
 
   private refreshZoneLabel(): void {
-    if (!this.zoneLabel) return;
+    if (!this.zoneLabelEl) return;
     const zone = RaidZoneSystem.getSelectedZone();
-    this.zoneLabel.setText(`${Strings.zoneDeployPrefix}${zone.name.toUpperCase()}`);
-    this.zoneLabel.setColor(zone.color);
+    this.zoneLabelEl.textContent = `${Strings.zoneDeployPrefix}${zone.name.toUpperCase()}`;
+    this.zoneLabelEl.style.color = zone.color;
+    this.zoneLabelEl.style.textShadow = `0 0 8px ${zone.color}`;
   }
 
   private drawPadFill(): void {
-    this.padFill.clear();
-    if (this.deployHold <= 0) return;
+    if (!this.padFillArc) return;
+    if (this.deployHold <= 0) {
+      this.padFillArc.setAttribute('stroke-dashoffset', String(this.padFillCircumference));
+      return;
+    }
     const ratio = this.deployHold / Balance.factory.deployPad.holdSec;
-    this.padFill.lineStyle(6, Balance.colors.extraction, 1);
-    const start = -Math.PI / 2;
-    const end = start + ratio * Math.PI * 2;
-    this.padFill.beginPath();
-    this.padFill.arc(this.padX, this.padY, this.padRadius * 0.82, start, end, false);
-    this.padFill.strokePath();
+    this.padFillArc.setAttribute('stroke-dashoffset', String(this.padFillCircumference * (1 - ratio)));
   }
 
   // §11 operator picker. Pinned to the viewport (scroll-factor 0) along the
@@ -772,110 +813,64 @@ export class FactoryScene extends Phaser.Scene {
   private buildOperatorPanel(): void {
     this.destroyOperatorPanel();
 
-    const tileW = 100;
-    const tileH = 110;
-    const gap = 14;
-    const totalW = OPERATOR_ORDER.length * tileW + (OPERATOR_ORDER.length - 1) * gap;
-    const startX = (this.scale.width - totalW) / 2;
-    const y = this.scale.height - tileH - 16;
+    const wrap = nfrEl('div', 'nfr-operator-panel');
 
-    const header = this.add
-      .text(this.scale.width / 2, y - 18, Strings.operatorPanelTitle, {
-        fontFamily: 'monospace',
-        fontSize: '12px',
-        color: '#22f6ff',
-        stroke: '#000000',
-        strokeThickness: 2,
-      })
-      .setOrigin(0.5, 0)
-      .setScrollFactor(0)
-      .setDepth(2050);
-    this.operatorPanelObjects.push(header);
+    // Header
+    const header = nfrEl('div', 'nfr-operator-panel__header');
+    header.textContent = Strings.operatorPanelTitle;
+    wrap.appendChild(header);
 
-    // Retention pass — "next operator chase" line. Blueprint §11.2 calls this
-    // out as the Day-2 retention driver. Show progress as "VANTA  48/50
-    // Cores" so the player always has a visible meta-loop reward 1-2 raids
-    // away. Affordable → green text + bright pulse to push the click.
+    // Retention teaser — "next operator chase" line.
     const almost = RetentionSystem.almostThere();
     if (almost.nextOperator) {
       const next = almost.nextOperator;
       const def = OperatorDefs[next.id];
-      const text = `${Strings.almostNextOperatorPrefix}${def.name}${Strings.almostNextOperatorMid}${next.cores}/${next.cost}${Strings.almostNextOperatorSuffix}`;
-      const color = next.ready ? '#72ff9f' : '#ffd75a';
-      const teaser = this.add
-        .text(this.scale.width / 2, y - 36, text, {
-          fontFamily: 'monospace',
-          fontSize: '11px',
-          color,
-          stroke: '#000000',
-          strokeThickness: 2,
-        })
-        .setOrigin(0.5, 0)
-        .setScrollFactor(0)
-        .setDepth(2050);
-      this.operatorPanelObjects.push(teaser);
-      if (next.ready) {
-        this.tweens.add({
-          targets: teaser,
-          alpha: { from: 1, to: 0.5 },
-          duration: 700,
-          yoyo: true,
-          repeat: -1,
-          ease: 'Sine.easeInOut',
-        });
-      }
+      const teaser = nfrEl('div', 'nfr-operator-panel__teaser');
+      if (next.ready) teaser.classList.add('is-ready');
+      teaser.textContent =
+        `${Strings.almostNextOperatorPrefix}${def.name}` +
+        `${Strings.almostNextOperatorMid}${next.cores}/${next.cost}` +
+        `${Strings.almostNextOperatorSuffix}`;
+      wrap.appendChild(teaser);
     }
 
-    for (let i = 0; i < OPERATOR_ORDER.length; i++) {
-      const id = OPERATOR_ORDER[i];
-      const x = startX + i * (tileW + gap);
-      this.buildOperatorTile(id, x, y, tileW, tileH);
+    const row = nfrEl('div', 'nfr-operator-panel__row');
+    for (const id of OPERATOR_ORDER) {
+      row.appendChild(this.buildOperatorTile(id));
     }
+    wrap.appendChild(row);
+
+    this.operatorPanelDismiss = nfrUIOverlay.mountHud(this, wrap);
   }
 
-  private buildOperatorTile(id: OperatorId, x: number, y: number, w: number, h: number): void {
+  private buildOperatorTile(id: OperatorId): HTMLElement {
     const def = OperatorDefs[id];
     const isUnlocked = OperatorSystem.isUnlocked(id);
     const isSelected = OperatorSystem.getSelected() === id;
     const isLocked = def.locked;
+    const tryQueued = OperatorSystem.getTryOut() === id;
 
-    // Background tile. Selected gets a brighter border.
-    const bg = this.add
-      .rectangle(x + w / 2, y + h / 2, w, h, 0x0a1014, 0.92)
-      .setStrokeStyle(isSelected ? 3 : 2, isSelected ? def.color : 0x4a5560, isSelected ? 1 : 0.7)
-      .setScrollFactor(0)
-      .setDepth(2050);
-    this.operatorPanelObjects.push(bg);
+    const tile = nfrEl('div', 'nfr-operator-tile');
+    if (isSelected) tile.classList.add('is-selected');
+    if (isLocked) tile.classList.add('is-coming-soon');
+    else if (!isUnlocked) tile.classList.add('is-locked');
 
-    // Silhouette - dim when locked, full color when selectable.
-    const silhouette = this.add.graphics().setScrollFactor(0).setDepth(2051);
-    silhouette.setPosition(x + w / 2, y + 28);
-    silhouette.fillStyle(def.color, isLocked || !isUnlocked ? 0.25 : 0.85);
-    silhouette.lineStyle(2, def.color, isLocked || !isUnlocked ? 0.35 : 1);
-    // Triangle silhouette pointing right - mirrors the player ship.
-    silhouette.beginPath();
-    silhouette.moveTo(14, 0);
-    silhouette.lineTo(-12, -10);
-    silhouette.lineTo(-6, 0);
-    silhouette.lineTo(-12, 10);
-    silhouette.closePath();
-    silhouette.fillPath();
-    silhouette.strokePath();
-    this.operatorPanelObjects.push(silhouette);
+    // Selected/locked color from def.color
+    const colorHex = '#' + def.color.toString(16).padStart(6, '0');
+    tile.style.setProperty('--nfr-op-color', colorHex);
 
-    // Name
-    const name = this.add
-      .text(x + w / 2, y + 52, def.name, {
-        fontFamily: 'monospace',
-        fontSize: '12px',
-        color: isLocked ? '#666666' : '#ffffff',
-      })
-      .setOrigin(0.5, 0)
-      .setScrollFactor(0)
-      .setDepth(2051);
-    this.operatorPanelObjects.push(name);
+    // Triangle silhouette (SVG, mirroring the player ship)
+    const icon = nfrEl('div', 'nfr-operator-tile__icon');
+    icon.innerHTML =
+      `<svg viewBox="-16 -14 32 28" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">` +
+      `<path d="M14 0 L-12 -10 L-6 0 L-12 10 Z" fill="currentColor" ` +
+      `stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
+    tile.appendChild(icon);
 
-    // Status line (state-dependent)
+    const name = nfrEl('div', 'nfr-operator-tile__name');
+    name.textContent = def.name;
+    tile.appendChild(name);
+
     const statusText = isLocked
       ? Strings.operatorComingSoon
       : isSelected
@@ -883,96 +878,37 @@ export class FactoryScene extends Phaser.Scene {
         : isUnlocked
           ? Strings.operatorUnlock
           : `${Strings.operatorCostPrefix}${def.unlockCost}${Strings.operatorCostSuffix}`;
-    const statusColor = isLocked
-      ? '#666666'
-      : isSelected
-        ? '#72ff9f'
-        : isUnlocked
-          ? '#22f6ff'
-          : '#ffd75a';
-    const status = this.add
-      .text(x + w / 2, y + 70, statusText, {
-        fontFamily: 'monospace',
-        fontSize: '10px',
-        color: statusColor,
-        stroke: '#000000',
-        strokeThickness: 2,
-      })
-      .setOrigin(0.5, 0)
-      .setScrollFactor(0)
-      .setDepth(2051);
-    this.operatorPanelObjects.push(status);
+    const status = nfrEl('div', 'nfr-operator-tile__status');
+    status.textContent = statusText;
+    tile.appendChild(status);
 
-    // Description
-    const desc = this.add
-      .text(x + w / 2, y + h - 18, def.description, {
-        fontFamily: 'monospace',
-        fontSize: '8px',
-        color: isLocked ? '#444444' : '#88a0a8',
-        wordWrap: { width: w - 8 },
-        align: 'center',
-      })
-      .setOrigin(0.5, 0)
-      .setScrollFactor(0)
-      .setDepth(2051);
-    this.operatorPanelObjects.push(desc);
+    const desc = nfrEl('div', 'nfr-operator-tile__desc');
+    desc.textContent = def.description;
+    tile.appendChild(desc);
 
-    if (isLocked) return; // No interactive zone for unimplemented operators.
+    if (!isLocked) {
+      tile.classList.add('is-clickable');
+      tile.addEventListener('click', () => this.handleOperatorTilePress(id));
+    }
 
-    const hit = this.add
-      .zone(x, y, w, h)
-      .setOrigin(0, 0)
-      .setScrollFactor(0)
-      .setDepth(2052)
-      .setInteractive({ useHandCursor: true });
-    this.operatorPanelObjects.push(hit);
-    hit.on('pointerdown', () => this.handleOperatorTilePress(id));
-
-    // M20 OPERATOR TRY-OUT — implemented but not yet unlocked tiles get a
-    // small "TRY IN NEXT RAID" pill above the tile that routes through the
-    // rewarded-ad path. Tutorial-gated: don't surface this until the player
-    // is past the FTUE so the first impression isn't ad-cluttered.
+    // M20 OPERATOR TRY-OUT pill.
     const showTryOut =
-      !isUnlocked && saveSystem.get().tutorialDone && OperatorSystem.getTryOut() !== id;
+      !isUnlocked && saveSystem.get().tutorialDone && !tryQueued && !isLocked;
     if (showTryOut) {
-      const tryY = y - 22;
-      const tryBg = this.add
-        .rectangle(x + w / 2, tryY, w - 8, 18, 0xa76cff, 1)
-        .setStrokeStyle(1, 0xffffff, 0.9)
-        .setScrollFactor(0)
-        .setDepth(2053)
-        .setInteractive({ useHandCursor: true });
-      const tryLabel = this.add
-        .text(x + w / 2, tryY, Strings.adOperatorTryButton, {
-          fontFamily: 'monospace',
-          fontSize: '9px',
-          color: '#000000',
-        })
-        .setOrigin(0.5)
-        .setScrollFactor(0)
-        .setDepth(2054);
-      this.operatorPanelObjects.push(tryBg);
-      this.operatorPanelObjects.push(tryLabel);
-      tryBg.on('pointerdown', () => {
+      const pill = nfrEl('button', 'nfr-operator-tile__try');
+      pill.textContent = Strings.adOperatorTryButton;
+      pill.addEventListener('click', (ev: MouseEvent) => {
+        ev.stopPropagation();
         void this.handleOperatorTryOut(id);
       });
-    } else if (OperatorSystem.getTryOut() === id) {
-      // Already queued — show a confirming label so the player knows the
-      // next raid will use this operator.
-      const tryY = y - 22;
-      const queuedLabel = this.add
-        .text(x + w / 2, tryY, 'TRY QUEUED', {
-          fontFamily: 'monospace',
-          fontSize: '9px',
-          color: '#72ff9f',
-          stroke: '#000000',
-          strokeThickness: 2,
-        })
-        .setOrigin(0.5)
-        .setScrollFactor(0)
-        .setDepth(2054);
-      this.operatorPanelObjects.push(queuedLabel);
+      tile.appendChild(pill);
+    } else if (tryQueued) {
+      const queued = nfrEl('div', 'nfr-operator-tile__queued');
+      queued.textContent = 'TRY QUEUED';
+      tile.appendChild(queued);
     }
+
+    return tile;
   }
 
   private handleOperatorTilePress(id: OperatorId): void {
@@ -995,45 +931,30 @@ export class FactoryScene extends Phaser.Scene {
   }
 
   private destroyOperatorPanel(): void {
-    for (const o of this.operatorPanelObjects) o.destroy();
-    this.operatorPanelObjects = [];
+    this.operatorPanelDismiss?.();
+    this.operatorPanelDismiss = null;
   }
 
   // Toast on FactoryScene entry when there's any standing infestation.
   // Decoupled from the first-time modal — appears every visit until cleared.
   private maybeShowInfestationToast(): void {
     if (!InfestationSystem.hasInfestation()) return;
-    // Don't show alongside the explainer modal on the very first visit.
     if (!saveSystem.get().infestationTutorialSeen) return;
-    const toast = this.add
-      .text(this.scale.width / 2, 100, Strings.infestationToast, {
-        fontFamily: 'monospace',
-        fontSize: '17px',
-        color: '#ff416b',
-        stroke: '#000000',
-        strokeThickness: 4,
-        backgroundColor: '#1a0a14',
-        padding: { x: 14, y: 8 },
-      })
-      .setOrigin(0.5, 0)
-      .setScrollFactor(0)
-      .setDepth(2200)
-      .setAlpha(0);
-    this.tweens.add({
-      targets: toast,
-      alpha: 1,
-      y: 120,
-      duration: 320,
-      ease: 'Cubic.easeOut',
-    });
-    this.time.delayedCall(4500, () => {
-      this.tweens.add({
-        targets: toast,
-        alpha: 0,
-        duration: 500,
-        onComplete: () => toast.destroy(),
-      });
-    });
+    this.showHtmlToast(Strings.infestationToast, 'red', 4500);
+  }
+
+  // Generic HTML toast — top-center pill that fades in/out and auto-dismisses.
+  // Used for offline rewards (handled separately by WelcomeBack), infestation
+  // warnings, quest claims, and ad rewards. Replaces the Phaser this.add.text
+  // toasts that looked like browser default fonts on a black bar.
+  private showHtmlToast(text: string, variant: 'gold' | 'green' | 'red' | 'cyan' = 'gold', durationMs = 3000): void {
+    if (!this.toastMgr) this.toastMgr = new NfrToastManager(this);
+    // Map our intent palette to the existing ToastManager variant set.
+    const toastVariant =
+      variant === 'red' ? 'alert' :
+      variant === 'gold' || variant === 'green' ? 'reward' :
+      'info';
+    this.toastMgr.show({ text, variant: toastVariant, duration: durationMs });
   }
 
   // First-time-only mechanic explainer. Per Run C clarification #3, this is
@@ -1044,78 +965,28 @@ export class FactoryScene extends Phaser.Scene {
     if (save.infestationTutorialSeen) return;
     if (!InfestationSystem.hasInfestation()) return;
 
-    const w = this.scale.width;
-    const h = this.scale.height;
-    const layer: Phaser.GameObjects.GameObject[] = [];
-    const backdrop = this.add
-      .rectangle(0, 0, w, h, 0x000000, 0.78)
-      .setOrigin(0, 0)
-      .setScrollFactor(0)
-      .setDepth(3000)
-      .setInteractive();
-    layer.push(backdrop);
-
-    const panelW = 560;
-    const panelH = 280;
-    const panel = this.add
-      .rectangle(w / 2, h / 2, panelW, panelH, 0x101820, 0.98)
-      .setStrokeStyle(3, 0xff416b, 0.95)
-      .setScrollFactor(0)
-      .setDepth(3001);
-    layer.push(panel);
-
-    layer.push(
-      this.add
-        .text(w / 2, h / 2 - panelH / 2 + 28, Strings.infestationModalTitle, {
-          fontFamily: 'monospace',
-          fontSize: '26px',
-          color: '#ff416b',
-          stroke: '#000000',
-          strokeThickness: 4,
-        })
-        .setOrigin(0.5, 0)
-        .setScrollFactor(0)
-        .setDepth(3002),
-    );
-    layer.push(
-      this.add
-        .text(w / 2, h / 2 - 20, Strings.infestationModalBody, {
-          fontFamily: 'monospace',
-          fontSize: '14px',
-          color: '#ffffff',
-          align: 'center',
-          wordWrap: { width: panelW - 60 },
-          lineSpacing: 6,
-        })
-        .setOrigin(0.5, 0.5)
-        .setScrollFactor(0)
-        .setDepth(3002),
-    );
-    const buttonY = h / 2 + panelH / 2 - 40;
-    const btn = this.add
-      .rectangle(w / 2, buttonY, 200, 44, 0xff416b, 1)
-      .setStrokeStyle(2, 0xffffff, 0.9)
-      .setScrollFactor(0)
-      .setDepth(3002)
-      .setInteractive({ useHandCursor: true });
-    layer.push(btn);
-    layer.push(
-      this.add
-        .text(w / 2, buttonY, Strings.infestationModalDismiss, {
-          fontFamily: 'monospace',
-          fontSize: '16px',
-          color: '#000000',
-        })
-        .setOrigin(0.5)
-        .setScrollFactor(0)
-        .setDepth(3003),
-    );
-    const dismiss = (): void => {
+    const panel = nfrEl('div', 'nfr-panel red nfr-panel--confirm');
+    const title = nfrEl('h2', 'nfr-panel__title');
+    title.textContent = Strings.infestationModalTitle;
+    panel.appendChild(title);
+    const body = nfrEl('p', 'nfr-panel__body');
+    body.textContent = Strings.infestationModalBody;
+    panel.appendChild(body);
+    const footer = nfrEl('div', 'nfr-panel__footer');
+    let dismiss: (() => void) | null = null;
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'nfr-btn red nfr-btn--lg';
+    closeBtn.textContent = Strings.infestationModalDismiss;
+    closeBtn.addEventListener('click', () => {
       InfestationSystem.markTutorialSeen();
       void saveSystem.persist();
-      for (const o of layer) o.destroy();
-    };
-    btn.on('pointerdown', dismiss);
+      dismiss?.();
+    });
+    footer.appendChild(closeBtn);
+    panel.appendChild(footer);
+
+    dismiss = nfrUIOverlay.mountModal(this, panel, { dismissOnBackdrop: false });
   }
 
   // §16.1 daily quest + §16.2 streak panel. Pinned to the right side of
@@ -1126,105 +997,45 @@ export class FactoryScene extends Phaser.Scene {
     this.destroyQuestPanel();
     const save = saveSystem.get();
     if (!save.ftueUnlocks.dailyClaim) return;
-    // Per spec: "panel only appears after tutorial done + first real raid".
-    // raidsCompleted counts the tutorial as 1, so >=2 means at least one
-    // real raid has finished.
     if (save.raidsCompleted < 2) return;
 
     DailyQuestSystem.ensureTodaysQuest();
     const cur = DailyQuestSystem.getCurrent();
 
-    // Bottom-left placement avoids the right-side upgrade panel and the
-    // bottom-center operator picker. The "right side panel beneath upgrades"
-    // wording from spec didn't fit when six upgrade rows reach near the
-    // bottom of the viewport, so we move to the symmetric corner.
-    const panelW = 320;
-    const panelH = 96;
-    const x = 12;
-    const startY = this.scale.height - panelH - 20;
+    const panel = nfrEl('div', 'nfr-panel cyan nfr-quest-card');
 
-    const header = this.add
-      .text(x + 4, startY - 18, Strings.questPanelTitle, {
-        fontFamily: 'monospace',
-        fontSize: '13px',
-        color: '#22f6ff',
-      })
-      .setScrollFactor(0)
-      .setDepth(2000);
-    this.questPanelObjects.push(header);
-
-    const cardBg = this.add
-      .rectangle(x, startY, panelW, panelH, 0x0a1014, 0.92)
-      .setOrigin(0, 0)
-      .setStrokeStyle(2, 0x22f6ff, 0.5)
-      .setScrollFactor(0)
-      .setDepth(2000);
-    this.questPanelObjects.push(cardBg);
+    const header = nfrEl('div', 'nfr-quest-card__title');
+    header.textContent = Strings.questPanelTitle;
+    panel.appendChild(header);
 
     if (!cur) {
-      const txt = this.add
-        .text(x + 12, startY + 14, '— claimed today —', {
-          fontFamily: 'monospace',
-          fontSize: '12px',
-          color: '#88a0a8',
-        })
-        .setScrollFactor(0)
-        .setDepth(2001);
-      this.questPanelObjects.push(txt);
+      const claimed = nfrEl('div', 'nfr-quest-card__claimed');
+      claimed.textContent = '— claimed today —';
+      panel.appendChild(claimed);
     } else {
-      const questText = this.add
-        .text(x + 12, startY + 10, cur.def.text, {
-          fontFamily: 'monospace',
-          fontSize: '13px',
-          color: '#ffffff',
-          wordWrap: { width: panelW - 24 },
-        })
-        .setScrollFactor(0)
-        .setDepth(2001);
-      this.questPanelObjects.push(questText);
+      const text = nfrEl('div', 'nfr-quest-card__text');
+      text.textContent = cur.def.text;
+      panel.appendChild(text);
 
-      const progressText = this.add
-        .text(x + 12, startY + 46, `${cur.progress}${Strings.questProgressMid}${cur.def.threshold}`, {
-          fontFamily: 'monospace',
-          fontSize: '13px',
-          color: cur.completed ? '#72ff9f' : '#22f6ff',
-        })
-        .setScrollFactor(0)
-        .setDepth(2001);
-      this.questPanelObjects.push(progressText);
+      const progRow = nfrEl('div', 'nfr-quest-card__progress');
+      if (cur.completed) progRow.classList.add('is-complete');
+      progRow.textContent =
+        `${cur.progress}${Strings.questProgressMid}${cur.def.threshold}`;
+      panel.appendChild(progRow);
 
       if (cur.completed) {
-        const btn = this.add
-          .rectangle(x + panelW - 78, startY + 52, 130, 28, 0x72ff9f, 1)
-          .setStrokeStyle(2, 0xffffff, 0.9)
-          .setScrollFactor(0)
-          .setDepth(2002)
-          .setInteractive({ useHandCursor: true });
-        this.questPanelObjects.push(btn);
-        const btnLabel = this.add
-          .text(x + panelW - 78, startY + 52, Strings.questClaimReady, {
-            fontFamily: 'monospace',
-            fontSize: '13px',
-            color: '#000000',
-          })
-          .setOrigin(0.5)
-          .setScrollFactor(0)
-          .setDepth(2003);
-        this.questPanelObjects.push(btnLabel);
-        btn.on('pointerdown', () => this.handleQuestClaim());
+        const claim = nfrEl('button', 'nfr-quest-card__claim');
+        claim.textContent = Strings.questClaimReady;
+        claim.addEventListener('click', () => this.handleQuestClaim());
+        panel.appendChild(claim);
       }
     }
 
-    const streakDay = StreakSystem.getDay();
-    const streakText = this.add
-      .text(x + 12, startY + 70, `${Strings.streakLabel}${streakDay}`, {
-        fontFamily: 'monospace',
-        fontSize: '11px',
-        color: '#ffd75a',
-      })
-      .setScrollFactor(0)
-      .setDepth(2001);
-    this.questPanelObjects.push(streakText);
+    const streak = nfrEl('div', 'nfr-quest-card__streak');
+    streak.textContent = `${Strings.streakLabel}${StreakSystem.getDay()}`;
+    panel.appendChild(streak);
+
+    this.questPanelDismiss = nfrUIOverlay.mountHud(this, panel);
   }
 
   private handleQuestClaim(): void {
@@ -1232,32 +1043,13 @@ export class FactoryScene extends Phaser.Scene {
     if (!result.ok) return;
     sfxCore();
     void saveSystem.persist();
-    // Toast the headline reward; the streak's own day-tier bonus is paid
-    // silently into the wallet (visible via the Scrap/Cores HUD).
-    const toast = this.add
-      .text(this.scale.width / 2, 60, Strings.questRewardToast, {
-        fontFamily: 'monospace',
-        fontSize: '15px',
-        color: '#ffd75a',
-        stroke: '#000000',
-        strokeThickness: 4,
-        backgroundColor: '#0a1014',
-        padding: { x: 14, y: 8 },
-      })
-      .setOrigin(0.5, 0)
-      .setScrollFactor(0)
-      .setDepth(2200)
-      .setAlpha(0);
-    this.tweens.add({ targets: toast, alpha: 1, y: 80, duration: 320, ease: 'Cubic.easeOut' });
-    this.time.delayedCall(3000, () => {
-      this.tweens.add({ targets: toast, alpha: 0, duration: 500, onComplete: () => toast.destroy() });
-    });
+    this.showHtmlToast(Strings.questRewardToast, 'gold', 3000);
     this.buildQuestPanel();
   }
 
   private destroyQuestPanel(): void {
-    for (const o of this.questPanelObjects) o.destroy();
-    this.questPanelObjects = [];
+    this.questPanelDismiss?.();
+    this.questPanelDismiss = null;
   }
 
   // §16.3 daily seed UI: a secondary "DAILY SEED" deploy button next to the
@@ -1274,40 +1066,24 @@ export class FactoryScene extends Phaser.Scene {
     const today = todayUtcDate();
     const attempted = LeaderboardSystem.hasAttemptedToday(today);
 
-    // Daily seed button — placed under the deploy pad.
-    const btnW = 160;
-    const btnH = 40;
-    const x = this.padX;
-    const y = this.padY + this.padRadius + 56;
-
-    const seedBg = this.add
-      .rectangle(x, y, btnW, btnH, attempted ? 0x444444 : 0xa76cff, attempted ? 0.55 : 1)
-      .setStrokeStyle(2, 0xffffff, attempted ? 0.25 : 0.85)
-      .setDepth(3);
-    this.dailySeedObjects.push(seedBg);
-    const seedLabel = this.add
-      .text(x, y, attempted ? Strings.factoryDailySeedAttempted : Strings.factoryDailySeed, {
-        fontFamily: 'monospace',
-        fontSize: '14px',
-        color: attempted ? '#888888' : '#ffffff',
-      })
-      .setOrigin(0.5)
-      .setDepth(4);
-    this.dailySeedObjects.push(seedLabel);
+    // Daily seed button — HTML pill pinned to the world position just below
+    // the deploy pad. Replaces the prior Phaser rectangle+text combo so it
+    // picks up the design-system chamfered button styling.
+    const seedBtn = nfrEl('button', `nfr-pad-seed-btn ${attempted ? 'is-attempted' : ''}`);
+    seedBtn.textContent = attempted ? Strings.factoryDailySeedAttempted : Strings.factoryDailySeed;
     if (!attempted) {
-      const hint = this.add
-        .text(x, y + btnH / 2 + 8, Strings.factoryDailySeedHint, {
-          fontFamily: 'monospace',
-          fontSize: '10px',
-          color: '#a76cff',
-          stroke: '#000000',
-          strokeThickness: 2,
-        })
-        .setOrigin(0.5, 0)
-        .setDepth(4);
-      this.dailySeedObjects.push(hint);
-      seedBg.setInteractive({ useHandCursor: true });
-      seedBg.on('pointerdown', () => this.launchDailySeedRaid());
+      seedBtn.addEventListener('click', () => this.launchDailySeedRaid());
+    } else {
+      seedBtn.disabled = true;
+    }
+    this.pinHtmlToWorld(seedBtn, this.padX, this.padY + this.padRadius + 56);
+    this.dailySeedObjects.push({ destroy: () => this.unpinHtmlFromWorld(seedBtn) });
+
+    if (!attempted) {
+      const seedHint = nfrEl('div', 'nfr-pad-seed-hint');
+      seedHint.textContent = Strings.factoryDailySeedHint;
+      this.pinHtmlToWorld(seedHint, this.padX, this.padY + this.padRadius + 90);
+      this.dailySeedObjects.push({ destroy: () => this.unpinHtmlFromWorld(seedHint) });
     }
 
     // Leaderboard button — top-right corner, viewport-pinned. HTML overlay
@@ -1319,9 +1095,7 @@ export class FactoryScene extends Phaser.Scene {
     lbBtn.textContent = Strings.leaderboardButton;
     lbBtn.addEventListener('click', () => this.openLeaderboard());
     const dismissLb = nfrUIOverlay.mountHud(this, lbBtn);
-    // Stash a Phaser-style teardown adapter in dailySeedObjects so
-    // destroyDailySeedAndLeaderboard() cleans it up uniformly.
-    this.dailySeedObjects.push({ destroy: dismissLb } as unknown as Phaser.GameObjects.GameObject);
+    this.dailySeedObjects.push({ destroy: dismissLb });
   }
 
   private launchDailySeedRaid(): void {
@@ -1427,7 +1201,7 @@ export class FactoryScene extends Phaser.Scene {
       dismissOnBackdrop: true,
       onDismiss: () => { this.leaderboardObjects = []; },
     });
-    this.leaderboardObjects.push({ destroy: dismiss } as unknown as Phaser.GameObjects.GameObject);
+    this.leaderboardObjects.push({ destroy: dismiss });
   }
 
   private closeLeaderboard(): void {
@@ -1629,35 +1403,7 @@ export class FactoryScene extends Phaser.Scene {
   }
 
   private showAdRewardToast(text: string): void {
-    const toast = this.add
-      .text(this.scale.width / 2, 50, text, {
-        fontFamily: 'monospace',
-        fontSize: '17px',
-        color: '#ffd75a',
-        stroke: '#000000',
-        strokeThickness: 4,
-        backgroundColor: '#0a1014',
-        padding: { x: 14, y: 8 },
-      })
-      .setOrigin(0.5, 0)
-      .setScrollFactor(0)
-      .setDepth(2200)
-      .setAlpha(0);
-    this.tweens.add({
-      targets: toast,
-      alpha: 1,
-      y: 70,
-      duration: 320,
-      ease: 'Cubic.easeOut',
-    });
-    this.time.delayedCall(3500, () => {
-      this.tweens.add({
-        targets: toast,
-        alpha: 0,
-        duration: 500,
-        onComplete: () => toast.destroy(),
-      });
-    });
+    this.showHtmlToast(text, 'gold', 3500);
   }
 
   // M20 OPERATOR TRY-OUT — handler called from the operator tile's "TRY IN

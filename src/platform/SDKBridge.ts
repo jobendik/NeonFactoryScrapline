@@ -92,16 +92,28 @@ class SDKBridgeImpl {
   private cachedUsername: string | null = null;
 
   async init(): Promise<void> {
+    // The SDK script is loaded async — it may not have executed yet when
+    // BootScene calls us. Poll for up to 1 s so production play on
+    // CrazyGames still works (SDK CDN is fast; 1 s is more than enough).
+    if (!rawSDK()) {
+      await new Promise<void>(resolve => {
+        const deadline = Date.now() + 1000;
+        const tick = (): void => {
+          if (rawSDK() || Date.now() >= deadline) resolve();
+          else setTimeout(tick, 50);
+        };
+        tick();
+      });
+    }
     const sdk = rawSDK();
     if (sdk) {
       try {
         // Bound the SDK handshake. On localhost / un-whitelisted domains the
-        // SDK's parent-frame ping blocks for ~5s before resolving to
-        // 'disabled', which strands the loading bar at 10%. Race a 2s
-        // timeout so we drop into fallback mode quickly when not on
-        // CrazyGames. Production iframe init resolves in well under 1s.
+        // SDK's parent-frame ping blocks before resolving to 'disabled'.
+        // Race a 1.5 s timeout so we drop into fallback quickly when not on
+        // CrazyGames. Production iframe init resolves in well under 1 s.
         const initTimeout = new Promise<'timeout'>(resolve => {
-          setTimeout(() => resolve('timeout'), 2000);
+          setTimeout(() => resolve('timeout'), 1500);
         });
         const result = await Promise.race([
           sdk.init().then(() => 'ok' as const),
