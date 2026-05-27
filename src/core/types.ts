@@ -43,7 +43,42 @@ export interface RaidEndPayload {
   zoneId?: RaidZoneId;
   zoneName?: string;
   unlockedZones?: string[];
+  // Retention Phase 1 — run performance stats for the new summary screen.
+  runStats?: RaidRunStats;
+  // XP awarded this run (computed by PlayerXpSystem.computeRaidXp).
+  xpEarned?: number;
+  // Account level before and after this run (for showing level-up in summary).
+  accountLevelBefore?: number;
+  accountLevelAfter?: number;
+  // Medal for notable performance (e.g. 'personalBest', 'lastSecond', 'longRun').
+  comebackMedal?: ComebackMedal;
+  // Single-line "what to do next" hint for the next-best-action row.
+  nextBestAction?: string;
+  // Retention Phase 3 — when the run was a daily-seed extraction, the score
+  // submitted and whether it beat every previous daily-seed best on record.
+  dailySeedScore?: number;
+  dailySeedNewBest?: boolean;
 }
+
+// Per-run performance stats shown on the result screen.
+export interface RaidRunStats {
+  elapsedSec: number;
+  killCount: number;
+  damageDealt: number;
+  damageTaken: number;
+  bestCombo: number;
+  scrapCollectedInRun: number;
+}
+
+// Medal awarded for notable outcomes (shown as a chip on the result screen).
+export type ComebackMedal =
+  | 'personalBest'    // new longest run
+  | 'lastSecond'      // extracted with ≤5s remaining
+  | 'longRun'         // survived longer than previous run
+  | 'fullCargo'       // extracted with zero unbanked penalty
+  | 'greedyExtract'   // extracted with greed multiplier active
+  | 'taskComplete'    // completed a daily task this run
+  | 'firstExtract';   // very first successful extraction
 
 export type RaidMode = 'tutorial' | 'normal' | 'dailySeed';
 

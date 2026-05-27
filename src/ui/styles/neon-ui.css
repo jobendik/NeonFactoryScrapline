@@ -1521,6 +1521,138 @@
   text-align: center;
 }
 
+/* ---- Retention Phase 1 additions ----------------------------------------- */
+
+/* Run stats card */
+.nfr-summary__stats-card {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 16px;
+  margin: 10px 0 6px;
+  padding: 10px 14px;
+  background: var(--nfr-bg-surface);
+  border: 1px solid var(--nfr-cyan-20);
+  position: relative;
+  z-index: 2;
+}
+.nfr-summary__stats-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.nfr-summary__stats-label {
+  font-family: var(--nfr-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--nfr-ink-dim);
+  text-transform: uppercase;
+}
+.nfr-summary__stats-value {
+  font-family: var(--nfr-font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--nfr-ink);
+}
+
+/* XP progression row */
+.nfr-summary__progression {
+  margin: 8px 0 4px;
+  position: relative;
+  z-index: 2;
+}
+.nfr-summary__xp-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 4px;
+}
+.nfr-summary__xp-label {
+  font-family: var(--nfr-font-mono);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  font-weight: 700;
+}
+.nfr-summary__xp-value {
+  font-family: var(--nfr-font-mono);
+  font-size: 12px;
+  color: var(--nfr-cyan);
+  font-weight: 600;
+}
+.nfr-summary__xp-track {
+  height: 5px;
+  background: var(--nfr-bg-surface);
+  border: 1px solid var(--nfr-cyan-20);
+  overflow: hidden;
+}
+.nfr-summary__xp-fill {
+  height: 100%;
+  background: var(--nfr-cyan);
+  transform-origin: left center;
+  transform: scaleX(0);
+  box-shadow: 0 0 6px var(--nfr-cyan-60);
+}
+
+/* Comeback medal chip */
+.nfr-summary__medal-chip {
+  display: inline-block;
+  margin: 8px auto 4px;
+  padding: 4px 12px;
+  border: 1px solid currentColor;
+  font-family: var(--nfr-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.10em;
+  font-weight: 700;
+  text-align: center;
+  position: relative;
+  z-index: 2;
+  animation: nfr-chip-in 300ms var(--nfr-ease-bounce) both;
+  animation-delay: 400ms;
+}
+@keyframes nfr-chip-in {
+  from { opacity: 0; transform: scale(0.7); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+/* HUD XP bar — slim pill in the wallet cluster */
+.nfr-xp-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+.nfr-xp-bar__track {
+  flex: 1;
+  height: 4px;
+  background: var(--nfr-bg-surface);
+  border: 1px solid var(--nfr-cyan-20);
+  overflow: hidden;
+  min-width: 60px;
+}
+.nfr-xp-bar__fill {
+  height: 100%;
+  background: var(--nfr-cyan);
+  transform-origin: left center;
+  transform: scaleX(0);
+  transition: transform 400ms ease-out;
+  box-shadow: 0 0 4px var(--nfr-cyan-45);
+}
+.nfr-xp-bar__label {
+  font-family: var(--nfr-font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--nfr-cyan-60);
+  white-space: nowrap;
+}
+
+/* XP floating text */
+.nfr-float-text[data-kind="xp"] {
+  color: var(--nfr-cyan);
+  font-family: var(--nfr-font-mono);
+  font-weight: 700;
+  text-shadow: 0 0 8px var(--nfr-cyan-60);
+}
+
 /* ============================================================================
  * Settings menu.
  * ========================================================================== */

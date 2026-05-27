@@ -63,6 +63,9 @@ export const Events = {
   // Suggestions audit — emitted by Player.dash() so cards (Nova Dash) and
   // analytics can react without polling.
   PLAYER_DASHED: 'player:dashed',
+  // Retention Phase 1 — account XP / level events.
+  ACCOUNT_LEVEL_UP: 'account:levelup',
+  XP_GRANTED: 'xp:granted',
 } as const;
 
 export type EventName = (typeof Events)[keyof typeof Events];

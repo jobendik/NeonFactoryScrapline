@@ -48,6 +48,10 @@ export class HUDOverlay {
   private coresValue: HTMLElement;
   private cleanseEl: HTMLElement;
 
+  // Retention Phase 1 — slim XP bar pinned below the wallet.
+  private xpBarFill: HTMLElement;
+  private xpBarLabel: HTMLElement;
+
   constructor(scene: Phaser.Scene) {
     this.root = el('div', 'nfr-hud-top');
 
@@ -128,6 +132,17 @@ export class HUDOverlay {
     right.appendChild(this.scrapEl);
     right.appendChild(this.coresEl);
     right.appendChild(this.cleanseEl);
+
+    // XP bar — compact pill below wallet, always visible during raid.
+    const xpBar = el('div', 'nfr-xp-bar');
+    const xpTrack = el('div', 'nfr-xp-bar__track');
+    this.xpBarFill = el('div', 'nfr-xp-bar__fill');
+    xpTrack.appendChild(this.xpBarFill);
+    this.xpBarLabel = el('div', 'nfr-xp-bar__label');
+    xpBar.appendChild(xpTrack);
+    xpBar.appendChild(this.xpBarLabel);
+    right.appendChild(xpBar);
+
     this.root.appendChild(right);
 
     this.dismiss = UIOverlay.mountHud(scene, this.root);
@@ -215,6 +230,13 @@ export class HUDOverlay {
     } else {
       this.cleanseEl.style.display = 'none';
     }
+  }
+
+  // Update the XP progress bar. Called each frame from HUDScene.
+  updateXp(xpIntoLevel: number, xpForLevel: number, level: number): void {
+    const pct = xpForLevel > 0 ? Math.max(0, Math.min(1, xpIntoLevel / xpForLevel)) : 0;
+    this.xpBarFill.style.transform = `scaleX(${pct})`;
+    this.xpBarLabel.textContent = `LVL ${level}`;
   }
 
   setPips(pips: PipInfo[], shieldCharges: number): void {
