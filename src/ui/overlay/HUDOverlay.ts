@@ -51,6 +51,8 @@ export class HUDOverlay {
   // Retention Phase 1 — slim XP bar pinned below the wallet.
   private xpBarFill: HTMLElement;
   private xpBarLabel: HTMLElement;
+  private buffBar: HTMLElement;
+  private buffs = new Map<string, { label: string; color: string; ttl?: number }>();
 
   constructor(scene: Phaser.Scene) {
     this.root = el('div', 'nfr-hud-top');
@@ -144,6 +146,9 @@ export class HUDOverlay {
     right.appendChild(xpBar);
 
     this.root.appendChild(right);
+
+    this.buffBar = el('div', 'nfr-buffbar');
+    this.root.appendChild(this.buffBar);
 
     this.dismiss = UIOverlay.mountHud(scene, this.root);
   }
@@ -273,6 +278,35 @@ export class HUDOverlay {
       bar.style.width = '100%';
       bar.style.color = '#ffffff';
       label.textContent = `SHLD x${shieldCharges}`;
+    }
+  }
+
+  setActiveBuff(key: string, label: string, color: string, ttl?: number): void {
+    this.buffs.set(key, { label, color, ttl });
+    this.renderBuffs();
+  }
+
+  clearBuff(key: string): void {
+    this.buffs.delete(key);
+    this.renderBuffs();
+  }
+
+  private renderBuffs(): void {
+    this.buffBar.replaceChildren();
+    if (this.buffs.size === 0) {
+      this.buffBar.style.display = 'none';
+      return;
+    }
+    this.buffBar.style.display = 'flex';
+    for (const [key, buff] of this.buffs) {
+      const chip = el('div', 'nfr-buffbar__chip');
+      chip.dataset.key = key;
+      chip.style.borderColor = buff.color;
+      chip.style.color = buff.color;
+      chip.style.boxShadow = `0 0 10px ${buff.color}33`;
+      const ttl = buff.ttl && buff.ttl > 0 ? ` · ${Math.ceil(buff.ttl / 1000)}s` : '';
+      chip.textContent = `${buff.label}${ttl}`;
+      this.buffBar.appendChild(chip);
     }
   }
 

@@ -20,6 +20,7 @@ import {
   type QuestKind,
 } from '../config/QuestDefs';
 import { bus, Events } from '../core/EventBus';
+import { DAILY_MODIFIER_DEFS, DAILY_MODIFIER_ORDER, type DailyModifierDef } from '../config/DailyModifierDefs';
 
 interface RngLike {
   pick<T>(arr: readonly T[]): T;
@@ -28,6 +29,22 @@ interface RngLike {
 const QUEST_REWARD_SCRAP = 100;
 const QUEST_REWARD_CORES = 1;
 const QUEST_REWARD_SHARDS = 1;
+
+
+/** FNV-1a 32-bit hash — deterministic, fast, good distribution for daily modifier bucketing. */
+function hashString(input: string): number {
+  let hash = 2166136261;
+  for (let i = 0; i < input.length; i++) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function modifierForDate(date: string): DailyModifierDef {
+  const idx = hashString(`modifier:${date}`) % DAILY_MODIFIER_ORDER.length;
+  return DAILY_MODIFIER_DEFS[DAILY_MODIFIER_ORDER[idx]];
+}
 
 class DailyQuestSystemImpl {
   private inited = false;
@@ -57,12 +74,25 @@ class DailyQuestSystemImpl {
   // within the same UTC day.
   ensureTodaysQuest(rng?: RngLike): void {
     const save = saveSystem.get();
+    const today = todayUtcDate();
+    const modifier = modifierForDate(today);
+    save.daily.modifierId = modifier.id;
     if (save.daily.questId && QuestDefs[save.daily.questId]) return;
-    if (save.daily.lastClaim === todayUtcDate()) return; // claimed today, wait til tomorrow
+    if (save.daily.lastClaim === today) return; // claimed today, wait til tomorrow
     const pick = rng ? rng.pick(QUEST_POOL) : QUEST_POOL[Math.floor(Math.random() * QUEST_POOL.length)];
     save.daily.questId = pick.id;
     save.daily.questProgress = 0;
     save.daily.questCompleted = false;
+  }
+
+  getModifier(): DailyModifierDef | null {
+    DailyQuestSystem.ensureTodaysQuest();
+    const id = saveSystem.get().daily.modifierId;
+    return id ? DAILY_MODIFIER_DEFS[id] ?? null : null;
+  }
+
+  getModifierForDate(date: string): DailyModifierDef | null {
+    return DAILY_MODIFIER_DEFS[modifierForDate(date).id] ?? null;
   }
 
   // Returns null when no quest is active OR when the current quest id was

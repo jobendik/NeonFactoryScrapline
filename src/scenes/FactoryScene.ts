@@ -23,14 +23,19 @@ import { LeaderboardSystem } from '../systems/LeaderboardSystem';
 import { todayUtcDate } from '../config/QuestDefs';
 import { AdManager } from '../platform/AdManager';
 import { CosmeticSystem } from '../systems/CosmeticSystem';
-import { openRefineryPanel, openMissionBoard, openPrestigePanel, openZonePanel } from '../ui/FactoryPanels';
+import { openRefineryPanel, openMissionBoard, openPrestigePanel, openZonePanel, openResearchPanel, openDroneBayPanel } from '../ui/FactoryPanels';
 import { openWeeklyBossPanel } from '../ui/WeeklyBossPanel';
 import { ensureCommonFX, applyGlow, FACTORY_BG_KEY, VIGNETTE_KEY } from '../systems/NeonFX';
 import { RetentionSystem } from '../systems/RetentionSystem';
 import { WelcomeBack } from '../ui/WelcomeBack';
-import { UIOverlay as nfrUIOverlay, el as nfrEl } from '../ui/overlay/UIOverlay';
+import { UIOverlay as nfrUIOverlay, el as nfrEl, btn } from '../ui/overlay/UIOverlay';
 import { ToastManager as NfrToastManager } from '../ui/overlay/ToastManager';
 import { RaidZoneSystem } from '../systems/RaidZoneSystem';
+import { ResearchSystem } from '../systems/ResearchSystem';
+import { DroneMissionSystem } from '../systems/DroneMissionSystem';
+import { EventSystem } from '../systems/EventSystem';
+import { openFortuneWheelPanel } from '../ui/FortuneWheelPanel';
+import { openDailyLoginPanel } from '../ui/DailyLoginPanel';
 
 // HTML factory for one button in the left-edge action column. The variant
 // drives both color and (for hover) the glow tint. Caller wires the click
@@ -113,6 +118,8 @@ export class FactoryScene extends Phaser.Scene {
   private adPanelDismiss: (() => void) | null = null;
   private adPanelLastSecond = -1;
   private factoryBoostBtn: HTMLButtonElement | null = null;
+  private eventBannerDismiss: (() => void) | null = null;
+  private backgroundCheckSecond = -1;
   // Pinned try-out toast (shown briefly after the player accepts the
   // OPERATOR TRY-OUT ad). HTML element + dismiss fn.
   private onUpgradePurchased = (..._args: unknown[]): void => this.handleUpgradePurchased();
@@ -123,6 +130,8 @@ export class FactoryScene extends Phaser.Scene {
 
   create(): void {
     RaidZoneSystem.syncUnlocks();
+    ResearchSystem.ensureSaveShape();
+    DroneMissionSystem.ensureSaveShape();
     const wb = Balance.player.worldBounds;
     const width = wb.maxX - wb.minX;
     const height = wb.maxY - wb.minY;
@@ -162,6 +171,7 @@ export class FactoryScene extends Phaser.Scene {
 
     bus.on(Events.UPGRADE_PURCHASED, this.onUpgradePurchased);
 
+    this.maybeShowOfflineRewardModal();
     this.showOfflineToast();
     this.refreshDeployPrompt();
     this.maybeShowInfestationToast();
@@ -169,6 +179,8 @@ export class FactoryScene extends Phaser.Scene {
     this.buildQuestPanel();
     this.buildDailySeedAndLeaderboardButtons();
     this.buildAdPanel();
+    this.buildEventBanner();
+    this.tickBackgroundSystems();
     MusicEngine.startFactory();
   }
 
@@ -267,11 +279,21 @@ export class FactoryScene extends Phaser.Scene {
           radius = drone.getPickupRadius();
         }
       }
+      if (ResearchSystem.hasMagnetPulse() && this.generators.length > 0) {
+        let nearest = this.generators[0];
+        let best = Number.POSITIVE_INFINITY;
+        for (const gen of this.generators) {
+          const gd = Phaser.Math.Distance.Between(p.x, p.y, gen.x, gen.y);
+          if (gd < best) { best = gd; nearest = gen; }
+        }
+        p.updateMagnet(dt, nearest.x, nearest.y, 120);
+      }
       p.updateMagnet(dt, pullX, pullY, radius);
     }
 
     this.tickDeployPad(dt);
     this.tickAdPanel();
+    this.tickBackgroundSystems();
     this.tickWorldPins();
   }
 
@@ -304,6 +326,8 @@ export class FactoryScene extends Phaser.Scene {
     this.destroyQuestPanel();
     this.destroyDailySeedAndLeaderboard();
     this.destroyAdPanel();
+    this.eventBannerDismiss?.();
+    this.eventBannerDismiss = null;
   }
 
   // ---- accessors used by HUDScene ----
@@ -431,16 +455,79 @@ export class FactoryScene extends Phaser.Scene {
   }
 
   private showOfflineToast(): void {
-    // Retention pass — the silent boot has been replaced with a sequenced
-    // welcome-back ceremony. WelcomeBack pulls the pending offline scrap
-    // (transient flag in saveSystem) plus the boot-banner queue
-    // (comeback / payday / streak warnings) and stages them with a count-up
-    // animation, a streak chip, and a payday badge. Idempotent across
-    // FactoryScene visits — banners are consumed once per session.
-    const amount = saveSystem.consumePendingOfflineScrap();
     const banners = RetentionSystem.consumeBootBanners();
-    if (amount <= 0 && banners.length === 0 && RetentionSystem.currentStreakDay() === 0) return;
-    WelcomeBack.show(this, { offlineScrap: amount, banners });
+    if (banners.length === 0 && RetentionSystem.currentStreakDay() === 0) return;
+    WelcomeBack.show(this, { offlineScrap: 0, banners });
+  }
+
+  private maybeShowOfflineRewardModal(): void {
+    const amount = saveSystem.getPendingOfflineScrap();
+    if (amount <= 0) return;
+    const panel = nfrEl('div', 'nfr-panel gold nfr-ad-modal');
+    panel.appendChild(nfrEl('h2', 'nfr-panel__title', Strings.offlineRewardTitle));
+    panel.appendChild(nfrEl('div', 'nfr-panel__subtitle', `${Strings.offlineRewardAmountPrefix}${amount}${Strings.offlineRewardAmountSuffix}`));
+    const body = nfrEl('div', 'nfr-panel__body');
+    body.appendChild(nfrEl('div', 'nfr-row__effect', Strings.offlineRewardBody));
+    panel.appendChild(body);
+    const footer = nfrEl('div', 'nfr-panel__footer');
+    let dismiss: (() => void) | null = null;
+    const collect = () => {
+      Economy.bankLoot(amount, 0);
+      saveSystem.clearPendingOfflineScrap();
+      void saveSystem.persist();
+      dismiss?.();
+    };
+    footer.appendChild(btn(Strings.offlineRewardCollect, 'cyan', collect, { size: 'lg' }));
+    footer.appendChild(btn(Strings.offlineRewardDouble, 'gold', async () => {
+      this.scene.pause();
+      const granted = await AdManager.offer(this, {
+        title: Strings.offlineRewardAdTitle,
+        description: Strings.offlineRewardAdDesc,
+        placement: 'factoryBoost',
+      });
+      this.scene.resume();
+      if (!granted) return;
+      Economy.bankLoot(amount * 2, 0);
+      saveSystem.clearPendingOfflineScrap();
+      void saveSystem.persist();
+      dismiss?.();
+    }, { size: 'lg' }));
+    panel.appendChild(footer);
+    dismiss = nfrUIOverlay.mountModal(this, panel, { dismissOnBackdrop: false });
+  }
+
+  private buildEventBanner(): void {
+    this.eventBannerDismiss?.();
+    this.eventBannerDismiss = null;
+    const active = EventSystem.getActiveEvent();
+    if (!active) return;
+    const banner = nfrEl('div', 'nfr-topright-btn');
+    banner.style.left = '50%';
+    banner.style.right = 'auto';
+    banner.style.top = '12px';
+    banner.style.transform = 'translateX(-50%)';
+    banner.style.borderColor = active.color;
+    banner.style.color = active.color;
+    banner.textContent = `${active.name} · ${active.description}`;
+    this.eventBannerDismiss = nfrUIOverlay.mountHud(this, banner);
+  }
+
+  private tickBackgroundSystems(): void {
+    const sec = Math.floor(Date.now() / 1000);
+    if (sec === this.backgroundCheckSecond) return;
+    this.backgroundCheckSecond = sec;
+    const completedResearch = ResearchSystem.checkCompletion();
+    if (completedResearch) {
+      void saveSystem.persist();
+      this.showHtmlToast(`${ResearchSystem.getDefs().find(d => d.id === completedResearch)?.name ?? Strings.researchTitle} complete`, 'green', 3500);
+      this.buildAdPanel();
+    }
+    const missions = DroneMissionSystem.checkCompletions();
+    if (missions.length > 0) {
+      void saveSystem.persist();
+      this.showHtmlToast(`${missions.length} ${Strings.droneBayMissionComplete}`, 'cyan', 3500);
+      this.buildAdPanel();
+    }
   }
 
   private spawnMilestoneVisuals(): void {
@@ -1008,6 +1095,14 @@ export class FactoryScene extends Phaser.Scene {
     const header = nfrEl('div', 'nfr-quest-card__title');
     header.textContent = Strings.questPanelTitle;
     panel.appendChild(header);
+    const modifier = DailyQuestSystem.getModifier();
+    if (modifier) {
+      const pill = nfrEl('div', 'nfr-quest-card__streak');
+      pill.textContent = modifier.name;
+      pill.style.color = modifier.color;
+      pill.style.borderColor = modifier.color;
+      panel.appendChild(pill);
+    }
 
     if (!cur) {
       const claimed = nfrEl('div', 'nfr-quest-card__claimed');
@@ -1287,6 +1382,8 @@ export class FactoryScene extends Phaser.Scene {
         }),
       ));
       col.appendChild(nfrActionBtn(Strings.refineryButton, 'violet', () => openRefineryPanel(this)));
+      col.appendChild(nfrActionBtn(Strings.researchButton, 'violet', () => openResearchPanel(this, () => this.buildAdPanel())));
+      col.appendChild(nfrActionBtn(Strings.droneBayButton, 'cyan', () => openDroneBayPanel(this, () => this.buildAdPanel())));
 
       // Weekly Boss (Signal Hydra) per blueprint §16.4. HTML/CSS-only
       // raid mode — visible once tutorial is done so it doesn't crowd
@@ -1301,6 +1398,11 @@ export class FactoryScene extends Phaser.Scene {
         contractsBtn.appendChild(badge);
       }
       col.appendChild(contractsBtn);
+      col.appendChild(nfrActionBtn(Strings.dailyRewardsButton, 'gold', () => openDailyLoginPanel(this)));
+      const wheelReady = save.adState.lastWheelSpin !== todayUtcDate();
+      const wheelBtn = nfrActionBtn(Strings.fortuneWheelButton, wheelReady ? 'gold' : 'cyan', () => openFortuneWheelPanel(this, () => this.buildAdPanel()));
+      if (!wheelReady) { wheelBtn.disabled = true; wheelBtn.classList.add('is-disabled'); }
+      col.appendChild(wheelBtn);
 
       const eligible =
         save.upgrades.gen >= Balance.prestige.minGenLevel && save.cores >= Balance.prestige.minCores;

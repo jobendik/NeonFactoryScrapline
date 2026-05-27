@@ -126,7 +126,7 @@ export class Pickup extends Phaser.Physics.Arcade.Sprite {
   // radius, it spends `orbitDurationSec` orbiting the player at a fixed
   // radius before final collection. Pure visual flourish — the value lands
   // identically once the orbit timer expires.
-  updateMagnet(dt: number, playerX: number, playerY: number, magnetRadius: number): void {
+  updateMagnet(dt: number, playerX: number, playerY: number, magnetRadius: number, forceOrbit = false): void {
     if (!this.active) return;
     this.age += dt;
     if (this.age >= Balance.magnet.pickupLifespanSec) {
@@ -144,7 +144,7 @@ export class Pickup extends Phaser.Physics.Arcade.Sprite {
     if (dist <= 0.5 || dist > magnetRadius) return;
 
     const magnetLvl = saveSystem.get().upgrades.magnet;
-    const orbitEnabled = magnetLvl >= 5;
+    const orbitEnabled = magnetLvl >= 5 || forceOrbit;
     const orbitEntryRadius = Balance.magnet.orbitEntryRadius;
     const orbitRadius = Balance.magnet.orbitRadius;
 

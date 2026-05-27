@@ -14,6 +14,9 @@ import { ToastManager } from '../ui/overlay/ToastManager';
 import { AchievementCallout } from '../ui/overlay/AchievementCallout';
 import { UIOverlay as nfrUIOverlay, el as nfrEl } from '../ui/overlay/UIOverlay';
 import { PlayerXpSystem } from '../systems/PlayerXpSystem';
+import { AdManager } from '../platform/AdManager';
+import { RetentionSystem } from '../systems/RetentionSystem';
+import { DailyQuestSystem } from '../systems/DailyQuestSystem';
 import { Analytics } from '../platform/Analytics';
 import type { RaidScene } from './RaidScene';
 import type { FactoryScene } from './FactoryScene';
@@ -203,6 +206,8 @@ export class HUDScene extends Phaser.Scene {
 
     if (this.hpFlashTimer > 0) this.hpFlashTimer = Math.max(0, this.hpFlashTimer - dt);
 
+    this.syncBuffBar();
+
     const raid = this.scene.get('RaidScene') as RaidScene | undefined;
     if (raid && raid.scene.isActive()) {
       this.renderRaid(raid);
@@ -218,12 +223,36 @@ export class HUDScene extends Phaser.Scene {
     this.clearRaidHud();
   }
 
+
+  private syncBuffBar(): void {
+    if (AdManager.isFactoryBoostActive()) {
+      this.overlay.setActiveBuff('factoryBoost', Strings.buffFactoryBoost, 'var(--nfr-gold)', AdManager.factoryBoostCooldownRemainingSec() * 1000);
+    } else {
+      this.overlay.clearBuff('factoryBoost');
+    }
+    const modifier = DailyQuestSystem.getModifier();
+    if (modifier) this.overlay.setActiveBuff('dailyModifier', modifier.name, modifier.color);
+    else this.overlay.clearBuff('dailyModifier');
+    if (RetentionSystem.isPaydayActive()) {
+      this.overlay.setActiveBuff('payday', Strings.buffDoublePayday, 'var(--nfr-green)');
+    } else {
+      this.overlay.clearBuff('payday');
+    }
+    if (RetentionSystem.isComebackActive()) {
+      this.overlay.setActiveBuff('comeback', Strings.buffComebackBonus, 'var(--nfr-amber)', RetentionSystem.comebackRemainingMs());
+    } else {
+      this.overlay.clearBuff('comeback');
+    }
+  }
+
   private showAutoQualityToast(text: string): void {
     this.toasts.show({ text, variant: 'info', duration: 3500 });
   }
 
   private renderPerfOverlay(fps: number): void {
     if (!this.perfOverlayEl) return;
+    this.syncBuffBar();
+
     const raid = this.scene.get('RaidScene') as RaidScene | undefined;
     let enemyCount = 0;
     let pickupCount = 0;

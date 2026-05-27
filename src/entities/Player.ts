@@ -25,6 +25,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private vy = 0;
   private dashTimer = 0;
   private dashCooldownTimer = 0;
+  private dashCharges = 1;
+  private maxDashCharges = 1;
   private invulnTimer = 0;
   private hitInvulnTimer = 0;
   private facing = 0;
@@ -222,7 +224,15 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   update(dt: number, input: PlayerInput): void {
-    this.dashCooldownTimer = Math.max(0, this.dashCooldownTimer - dt);
+    if (this.dashCooldownTimer > 0) {
+      this.dashCooldownTimer = Math.max(0, this.dashCooldownTimer - dt);
+      if (this.dashCooldownTimer <= 0 && this.dashCharges < this.maxDashCharges) {
+        this.dashCharges += 1;
+        if (this.dashCharges < this.maxDashCharges) {
+          this.dashCooldownTimer = Balance.player.dashCooldown * this.dashCooldownMult * UpgradeEffects.dashCooldownMult();
+        }
+      }
+    }
     this.dashTimer = Math.max(0, this.dashTimer - dt);
     this.invulnTimer = Math.max(0, this.invulnTimer - dt);
     this.hitInvulnTimer = Math.max(0, this.hitInvulnTimer - dt);
@@ -239,7 +249,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       }
     }
 
-    if (input.dash && this.dashCooldownTimer <= 0 && this.dashTimer <= 0) {
+    if (input.dash && this.dashCharges > 0 && this.dashTimer <= 0) {
       this.startDash(input);
     }
 
@@ -286,14 +296,17 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     const inLen = Math.hypot(input.x, input.y);
     const dx = inLen > 0 ? input.x / inLen : Math.cos(this.facing);
     const dy = inLen > 0 ? input.y / inLen : Math.sin(this.facing);
+    this.dashCharges = Math.max(0, this.dashCharges - 1);
     this.vx = dx * Balance.player.dashForce;
     this.vy = dy * Balance.player.dashForce;
     this.dashTimer = Balance.player.dashDuration;
     this.invulnTimer = Balance.player.dashInvuln;
     // Dash Master card multiplies cooldown (×0.7 per stack).
     // Quick Boots refinery upgrade composes with the Dash Master card mult.
-    this.dashCooldownTimer =
-      Balance.player.dashCooldown * this.dashCooldownMult * UpgradeEffects.dashCooldownMult();
+    if (this.dashCharges < this.maxDashCharges) {
+      this.dashCooldownTimer =
+        Balance.player.dashCooldown * this.dashCooldownMult * UpgradeEffects.dashCooldownMult();
+    }
     this.setTint(Balance.colors.playerDashAccent);
     this.scene.time.delayedCall(Balance.player.dashDuration * 1000, () => this.clearTint());
     const shakeScale = QualityManager.isReducedMotion() ? 0 : 1;
@@ -319,6 +332,10 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     return this.dashCooldownTimer;
   }
 
+  getDashCharges(): { current: number; max: number } {
+    return { current: this.dashCharges, max: this.maxDashCharges };
+  }
+
   getFacing(): number {
     return this.facing;
   }
@@ -341,6 +358,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   applyRunMods(mods: RunMods): void {
     this.speedMult = mods.speedMult;
     this.dashCooldownMult = mods.dashCooldownMult;
+    this.maxDashCharges = 1 + Math.max(0, Math.floor(mods.bonusDashCharges));
+    this.dashCharges = Math.min(this.maxDashCharges, Math.max(this.dashCharges, 1));
     const oldBonus = this.bonusHP;
     this.bonusHP = mods.bonusHP;
     // Bonus HP additively raises max; pick-up grants top up current HP by the

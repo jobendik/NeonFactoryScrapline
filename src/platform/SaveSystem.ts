@@ -14,7 +14,7 @@ import {
   type RaidZoneId,
 } from '../config/ScraplineDefs';
 
-export const SAVE_VERSION = 14;
+export const SAVE_VERSION = 15;
 
 export type QualityPreset = 'low' | 'medium' | 'high';
 const SAVE_KEY = 'save';
@@ -39,7 +39,9 @@ export interface SaveDaily {
   // rule). lastStreakDate tracks the YYYY-MM-DD the streak last advanced.
   streakDay: number;
   lastStreakDate: string;
+  modifierId: string;
 }
+
 
 export interface SaveCosmetics {
   equipped: { trail: string; skin: string; theme: string };
@@ -88,6 +90,7 @@ export interface SaveData {
     factoryBoostLastMs: number;
     factoryBoostActiveUntilMs: number;
     lastDailyCrate: string;
+    lastWheelSpin: string;
   };
   // M20 — OPERATOR TRY-OUT scaffolding. Set when the player accepts the
   // try-out ad on the operator picker; consumed at the next raid start in
@@ -164,6 +167,8 @@ export interface SaveData {
   // "survived longer than last" comeback medal.
   consecutiveLosses: number;
   previousRaidElapsedSec: number;
+  research: { completed: string[]; activeId: string | null; activeStartMs: number };
+  droneMissions: { active: Array<{ missionId: string; startMs: number; slotIdx: number }> };
   // Weekly Boss (Signal Hydra) — blueprint §16.4. Local-only fastest-kill
   // leaderboard (no backend), keyed by ISO week. Optional so older save
   // shapes load cleanly; WeeklyBossSystem.ensureSaveShape() seeds the slice
@@ -207,6 +212,7 @@ export function createDefaultSave(): SaveData {
       questCompleted: false,
       streakDay: 0,
       lastStreakDate: '',
+      modifierId: '',
     },
     cosmetics: { equipped: { trail: '', skin: '', theme: '' }, owned: [] },
     infestation: { machineIds: [], failsBeforeFirst: Balance.infestation.failsBeforeInfestation },
@@ -219,6 +225,7 @@ export function createDefaultSave(): SaveData {
       factoryBoostLastMs: 0,
       factoryBoostActiveUntilMs: 0,
       lastDailyCrate: '',
+      lastWheelSpin: '',
     },
     tryOutOperator: null,
     lastRaidDate: '',
@@ -249,6 +256,8 @@ export function createDefaultSave(): SaveData {
     seasonXp: 0,
     consecutiveLosses: 0,
     previousRaidElapsedSec: 0,
+    research: { completed: [], activeId: null, activeStartMs: 0 },
+    droneMissions: { active: [] },
     weeklyBoss: { history: [], totalKills: 0 },
     lastSave: Date.now(),
   };
@@ -348,6 +357,7 @@ function migrateV4toV5(v4: MigratingSave): MigratingSave {
       questCompleted: false,
       streakDay: carriedStreak,
       lastStreakDate: '',
+      modifierId: '',
     },
     cosmeticShards: typeof v4.cosmeticShards === 'number' ? (v4.cosmeticShards as number) : 0,
   };
@@ -374,6 +384,7 @@ function migrateV6toV7(v6: MigratingSave): MigratingSave {
       factoryBoostLastMs: 0,
       factoryBoostActiveUntilMs: 0,
       lastDailyCrate: '',
+      lastWheelSpin: '',
     },
     tryOutOperator: null,
     lastRaidDate: '',
@@ -498,6 +509,43 @@ function migrateV13toV14(v13: MigratingSave): MigratingSave {
   };
 }
 
+
+// v14 → v15: research, drone missions, daily modifiers, and fortune wheel state.
+function migrateV14toV15(v14: MigratingSave): MigratingSave {
+  return {
+    ...v14,
+    version: 15,
+    daily: {
+      ...(v14.daily as object ?? {}),
+      modifierId: typeof (v14.daily as { modifierId?: unknown })?.modifierId === 'string'
+        ? (v14.daily as { modifierId: string }).modifierId
+        : '',
+    },
+    adState: {
+      ...((v14.adState ?? {}) as object),
+      lastWheelSpin: typeof (v14.adState as { lastWheelSpin?: unknown })?.lastWheelSpin === 'string'
+        ? (v14.adState as { lastWheelSpin: string }).lastWheelSpin
+        : '',
+    },
+    research: {
+      completed: Array.isArray((v14 as { research?: { completed?: unknown } }).research?.completed)
+        ? ((v14 as { research: { completed: string[] } }).research.completed)
+        : [],
+      activeId: typeof (v14 as { research?: { activeId?: unknown } }).research?.activeId === 'string'
+        ? ((v14 as { research: { activeId: string } }).research.activeId)
+        : null,
+      activeStartMs: typeof (v14 as { research?: { activeStartMs?: unknown } }).research?.activeStartMs === 'number'
+        ? ((v14 as { research: { activeStartMs: number } }).research.activeStartMs)
+        : 0,
+    },
+    droneMissions: {
+      active: Array.isArray((v14 as { droneMissions?: { active?: unknown } }).droneMissions?.active)
+        ? ((v14 as { droneMissions: { active: { missionId: string; startMs: number; slotIdx: number }[] } }).droneMissions.active)
+        : [],
+    },
+  };
+}
+
 // Migration path - new versions add their case here. Old saves walk forward step
 // by step. Per the M10 gate: a v0 save (no `version` field, written before
 // versioning existed) is treated as a fresh save - we don't try to merge
@@ -524,13 +572,14 @@ function migrate(raw: unknown): SaveData {
   if (save.version === 11) save = migrateV11toV12(save);
   if (save.version === 12) save = migrateV12toV13(save);
   if (save.version === 13) save = migrateV13toV14(save);
+  if (save.version === 14) save = migrateV14toV15(save);
 
   if (save.version === SAVE_VERSION) {
     return save as unknown as SaveData;
   }
 
   // Future migration steps register here:
-  //   if (save.version === 10) save = migrateV10toV11(save);
+  //   if (save.version === 15) save = migrateV15toV16(save);
   // Unknown / future versions fall through to a fresh save - safer than
   // running mismatched logic against a shape we don't understand.
   return createDefaultSave();
@@ -564,11 +613,28 @@ export class SaveSystem {
     this.pendingOfflineScrap = Math.max(0, amount);
   }
 
+  getPendingOfflineScrap(): number {
+    return this.pendingOfflineScrap;
+  }
+
+  clearPendingOfflineScrap(): void {
+    this.pendingOfflineScrap = 0;
+  }
+
   consumePendingOfflineScrap(): number {
     const v = this.pendingOfflineScrap;
     this.pendingOfflineScrap = 0;
     return v;
   }
+
+  async importData(raw: unknown): Promise<boolean> {
+    if (!raw || typeof raw !== 'object' || typeof (raw as { version?: unknown }).version !== 'number') return false;
+    this.data = migrate(raw);
+    this.pendingOfflineScrap = 0;
+    await this.persist();
+    return true;
+  }
 }
+
 
 export const saveSystem = new SaveSystem();

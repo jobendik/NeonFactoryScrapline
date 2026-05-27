@@ -19,6 +19,7 @@ export interface RunMods {
   // -------- Movement --------
   speedMult: number;         // 1.0 base, +0.10 per Quick Feet
   dashCooldownMult: number;  // 1.0 base, ×0.7 per Dash Master (multiplicative)
+  bonusDashCharges: number;  // 0 base, +1 from research
 
   // -------- Survival --------
   bonusHP: number;           // 0 base, +20 per Hardy
@@ -31,7 +32,9 @@ export interface RunMods {
 
   // -------- Loot / Magnet --------
   coreChanceBonus: number;   // 0 base, +0.05 per Lucky
+  coreChanceMult: number;    // 1.0 base, ×1.5 from daily CORE BLOOM
   magnetMult: number;        // 1.0 base, +0.20 per Wide Magnet
+  orbitPickups: boolean;     // false base, true from orbital research
   magnetStormDurAdd: number; // 0 base, +8 per Magnet Storm — auto-fires Magnet Burst-equivalent
   greedSurgeMult: number;    // 1.0 base, ×1.5 per Greed Surge — multiplicative with greed step
 
@@ -62,7 +65,9 @@ export interface RunMods {
   // Ricochet: enables wall-bounce for player bullets (not used by hitscan
   // tracer model). Lifted to a stack count for future use.
   ricochetStacks: number;
+  extractHoldMult: number;
 }
+
 
 export function createDefaultRunMods(): RunMods {
   return {
@@ -76,6 +81,7 @@ export function createDefaultRunMods(): RunMods {
 
     speedMult: 1.0,
     dashCooldownMult: 1.0,
+    bonusDashCharges: 0,
 
     bonusHP: 0,
     healOnPickup: 0,
@@ -86,7 +92,9 @@ export function createDefaultRunMods(): RunMods {
     phoenixCharges: 0,
 
     coreChanceBonus: 0,
+    coreChanceMult: 1.0,
     magnetMult: 1.0,
+    orbitPickups: false,
     magnetStormDurAdd: 0,
     greedSurgeMult: 1.0,
 
@@ -101,5 +109,6 @@ export function createDefaultRunMods(): RunMods {
     pyroAoeRadius: 0,
     pyroAoeDamage: 0,
     ricochetStacks: 0,
+    extractHoldMult: 1.0,
   };
 }

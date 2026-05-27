@@ -30,6 +30,7 @@ export class ExtractionSystem {
   // range of the pad bring this below 1.0 each frame to slow the timer per
   // §14.1.
   private externalFillMult = 1;
+  private holdTimeMult = 1;
 
   constructor(scene: Phaser.Scene, padX: number, padY: number, padRadius: number, openAt: number) {
     this.padX = padX;
@@ -62,7 +63,7 @@ export class ExtractionSystem {
       }
     } else {
       const inside = this.isPlayerInside(playerX, playerY);
-      const fillPerSec = 1 / Balance.raid.extractionHoldTime;
+      const fillPerSec = 1 / (Balance.raid.extractionHoldTime * this.holdTimeMult);
       if (inside) {
         // Extract Jammer slow applies only to the fill direction; decay is
         // unaffected so leaving the pad still drains at the normal rate.
@@ -114,6 +115,10 @@ export class ExtractionSystem {
   // after every update() so the next frame requires re-application.
   setExternalFillMult(mult: number): void {
     this.externalFillMult = Math.max(0, Math.min(1, mult));
+  }
+
+  setHoldTimeMult(mult: number): void {
+    this.holdTimeMult = Math.max(0.1, mult);
   }
 
   destroy(): void {
