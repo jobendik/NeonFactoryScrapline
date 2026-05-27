@@ -330,6 +330,40 @@ const StringsEn = {
   endReasonDied: 'Core breached. Tip: dash through bullets — you’re immune while dashing.',
   endReasonTimer: 'Time collapsed. Tip: hold the extraction pad before the timer runs out.',
   endReasonVoluntary: 'Signal aborted. Half your unbanked loot was salvaged.',
+
+  // Weekly Boss (Signal Hydra) — blueprint §16.4. All copy is short and
+  // intelligible without context so the mode reads as a discrete event.
+  weeklyBossButton: 'WEEKLY BOSS',
+  weeklyBossTitle: 'SIGNAL HYDRA',
+  weeklyBossSubtitle: 'Weekly Raid · Fastest Kill',
+  weeklyBossBriefingBody:
+    'A multi-phase signal anomaly has surfaced in the scrap network. Destroy each weak point as it emerges. ' +
+    'You have 5 minutes. Best time this week is recorded to the leaderboard.',
+  weeklyBossEnter: 'ENGAGE',
+  weeklyBossClose: 'CLOSE',
+  weeklyBossLeaderboardTitle: 'FASTEST KILLS',
+  weeklyBossLeaderboardEmpty: 'No clears yet. First kill makes the board.',
+  weeklyBossResetPrefix: 'Weekly reset in ',
+  weeklyBossBestThisWeekPrefix: 'Best this week: ',
+  weeklyBossBestNone: '—',
+  weeklyBossTotalKillsPrefix: 'Lifetime clears: ',
+  weeklyBossPhase1: 'PHASE 1 · DORMANT',
+  weeklyBossPhase2: 'PHASE 2 · UNSTABLE',
+  weeklyBossPhase3: 'PHASE 3 · CASCADE',
+  weeklyBossVictoryTitle: 'HYDRA DOWN',
+  weeklyBossDefeatTitle: 'OVERRUN',
+  weeklyBossTimeUpTitle: 'TIME COLLAPSED',
+  weeklyBossTimeLabel: 'TIME',
+  weeklyBossHpLabel: 'HYDRA',
+  weeklyBossPlayerHpLabel: 'HULL',
+  weeklyBossKillTimePrefix: 'CLEAR TIME · ',
+  weeklyBossNewBest: 'NEW PERSONAL BEST',
+  weeklyBossRewardCoresSuffix: ' Cores',
+  weeklyBossRewardShardsSuffix: ' Shards',
+  weeklyBossReturn: 'RETURN TO FACTORY',
+  weeklyBossRetry: 'RETRY',
+  weeklyBossTutorialHint:
+    'WASD / Arrows to move · Click / Space to fire · Strike pulsing weak points.',
 };
 
 export type Locale = 'en' | 'no' | 'es' | 'pt' | 'de' | 'fr';

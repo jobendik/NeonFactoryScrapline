@@ -1,0 +1,640 @@
+/* ============================================================================
+ * Weekly Boss (Signal Hydra) — blueprint §16.4.
+ *
+ * Everything here is HTML/CSS. No <canvas>, no Phaser GameObjects. The boss
+ * battle is a full-stage overlay laid out in CSS-pixel coordinates (1280×720
+ * design space, scaled by the canvas's --nfr-canvas-w/h via the .wb-arena
+ * inline width/height set by WeeklyBossPanel).
+ *
+ * Coordinate convention inside .wb-arena:
+ *   position: absolute; left/top in PERCENT of arena size.
+ *   transform: translate(-50%, -50%) so left/top is the entity CENTER.
+ *   Entity diameter is set via --wb-size in px (scaled by --nfr-scale).
+ * ========================================================================== */
+
+.wb-root {
+  position: absolute;
+  inset: 0;
+  pointer-events: auto;
+  font-family: var(--nfr-font-ui);
+  color: var(--nfr-ink);
+  z-index: 10;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at center, rgba(8, 12, 22, 0.55), rgba(2, 4, 8, 0.94)),
+    rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(10px) saturate(140%);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+  animation: nfr-fade-in 220ms var(--nfr-ease-snap) forwards;
+  opacity: 0;
+  /* Disable native touch scroll/zoom while playing. */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Diagonal grid drift + scanlines (matches the preloader vibe). */
+.wb-root::before {
+  content: "";
+  position: absolute;
+  inset: -10%;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(
+      45deg,
+      transparent 0,
+      transparent 40px,
+      rgba(34, 246, 255, 0.05) 40px,
+      rgba(34, 246, 255, 0.05) 41px
+    ),
+    repeating-linear-gradient(
+      -45deg,
+      transparent 0,
+      transparent 40px,
+      rgba(167, 108, 255, 0.04) 40px,
+      rgba(167, 108, 255, 0.04) 41px
+    );
+  animation: wb-grid 28s linear infinite;
+}
+.wb-root::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(34, 246, 255, 0.035) 0,
+    rgba(34, 246, 255, 0.035) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  mix-blend-mode: screen;
+}
+@keyframes wb-grid {
+  0%   { transform: translate3d(0, 0, 0); }
+  100% { transform: translate3d(56px, 56px, 0); }
+}
+
+/* ----- HUD strip (timer + HP bars) ---------------------------------------- */
+.wb-hud {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 14px 24px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+  z-index: 12;
+}
+.wb-hud__row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.wb-hud__label {
+  font-size: var(--nfr-text-xs);
+  letter-spacing: 0.20em;
+  color: var(--nfr-ink-dim);
+  min-width: 64px;
+}
+.wb-hud__value {
+  font-family: "Orbitron", var(--nfr-font-ui);
+  font-size: clamp(18px, 2vw, 24px);
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: var(--nfr-cyan);
+  text-shadow: var(--nfr-glow-cyan-tight);
+  font-variant-numeric: tabular-nums;
+}
+.wb-hud__value.is-warning { color: var(--nfr-amber); text-shadow: 0 0 8px rgba(255, 178, 74, 0.55); }
+.wb-hud__value.is-critical { color: var(--nfr-red); text-shadow: var(--nfr-glow-red-mid); animation: wb-pulse-text 0.6s ease-in-out infinite; }
+@keyframes wb-pulse-text {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+.wb-bar {
+  position: relative;
+  flex: 1;
+  height: 10px;
+  background: rgba(34, 246, 255, 0.06);
+  border: 1px solid rgba(34, 246, 255, 0.55);
+  box-shadow: inset 0 0 8px rgba(34, 246, 255, 0.15);
+}
+.wb-bar__fill {
+  position: absolute;
+  inset: 1px;
+  width: 100%;
+  transform-origin: left center;
+  transition: transform 0.18s ease-out;
+}
+.wb-bar--boss .wb-bar__fill {
+  background: linear-gradient(90deg, #ff416b 0%, #ffb24a 50%, #ffd75a 100%);
+  box-shadow: 0 0 10px rgba(255, 65, 107, 0.7);
+}
+.wb-bar--player {
+  border-color: rgba(114, 255, 159, 0.65);
+}
+.wb-bar--player .wb-bar__fill {
+  background: linear-gradient(90deg, #72ff9f 0%, #22f6ff 100%);
+  box-shadow: 0 0 10px rgba(114, 255, 159, 0.6);
+}
+
+/* Phase tick marks on the boss bar — three visible thresholds. */
+.wb-bar--boss::before,
+.wb-bar--boss::after {
+  content: "";
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  background: rgba(255, 255, 255, 0.5);
+}
+.wb-bar--boss::before { left: 33%; }
+.wb-bar--boss::after  { left: 66%; }
+
+/* ----- Arena --------------------------------------------------------------- */
+.wb-arena {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  /* Sized inline by JS so internal % coordinates stay consistent. */
+  border: 1px solid rgba(34, 246, 255, 0.22);
+  box-shadow:
+    inset 0 0 60px rgba(34, 246, 255, 0.08),
+    0 0 40px rgba(34, 246, 255, 0.15);
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at 50% 50%, rgba(167, 108, 255, 0.10), transparent 60%),
+    radial-gradient(ellipse at 50% 30%, rgba(255, 65, 107, 0.08), transparent 55%),
+    #04060c;
+  z-index: 11;
+  cursor: crosshair;
+}
+/* Arena floor — concentric danger rings under the boss. */
+.wb-arena::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 38%;
+  width: 70%;
+  height: 70%;
+  transform: translate(-50%, -50%);
+  background:
+    radial-gradient(circle at center,
+      rgba(255, 65, 107, 0.10) 0%,
+      rgba(255, 65, 107, 0.05) 28%,
+      transparent 60%);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: wb-floor-pulse 4s ease-in-out infinite;
+}
+@keyframes wb-floor-pulse {
+  0%, 100% { opacity: 0.7; transform: translate(-50%, -50%) scale(1); }
+  50%      { opacity: 1.0; transform: translate(-50%, -50%) scale(1.05); }
+}
+
+/* ----- Boss body (Signal Hydra) ------------------------------------------- */
+.wb-hydra {
+  position: absolute;
+  left: 50%;
+  top: 32%;
+  transform: translate(-50%, -50%);
+  width: 200px;
+  height: 200px;
+  pointer-events: none;
+}
+.wb-hydra__core {
+  position: absolute;
+  inset: 25%;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 35% 30%, #ffffff 0%, #ffd75a 18%, #ff416b 45%, #6b1933 80%, #2a0a18 100%);
+  border: 2px solid rgba(255, 215, 90, 0.85);
+  box-shadow:
+    0 0 30px rgba(255, 65, 107, 0.8),
+    0 0 60px rgba(255, 65, 107, 0.45),
+    inset 0 0 24px rgba(255, 255, 255, 0.25);
+  animation: wb-core-breathe 1.8s ease-in-out infinite;
+}
+@keyframes wb-core-breathe {
+  0%, 100% { transform: scale(1); filter: brightness(1); }
+  50%      { transform: scale(1.06); filter: brightness(1.15); }
+}
+.wb-hydra__ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid rgba(167, 108, 255, 0.55);
+  box-shadow:
+    0 0 24px rgba(167, 108, 255, 0.5),
+    inset 0 0 24px rgba(167, 108, 255, 0.25);
+  animation: wb-ring-spin 9s linear infinite;
+}
+.wb-hydra__ring--inner {
+  inset: 12%;
+  border-color: rgba(34, 246, 255, 0.55);
+  box-shadow:
+    0 0 24px rgba(34, 246, 255, 0.5),
+    inset 0 0 24px rgba(34, 246, 255, 0.25);
+  animation: wb-ring-spin 5s linear infinite reverse;
+  border-style: dashed;
+}
+@keyframes wb-ring-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Tentacles — radiating bars positioned by inline CSS variable --wb-angle. */
+.wb-hydra__tentacle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 8px;
+  height: 90px;
+  margin-left: -4px;
+  margin-top: -4px;
+  transform-origin: 4px 4px;
+  transform: rotate(var(--wb-angle, 0deg));
+  pointer-events: none;
+}
+.wb-hydra__tentacle::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg,
+    rgba(167, 108, 255, 0.9) 0%,
+    rgba(167, 108, 255, 0.6) 50%,
+    rgba(167, 108, 255, 0.0) 100%);
+  box-shadow: 0 0 12px rgba(167, 108, 255, 0.6);
+  border-radius: 4px;
+  animation: wb-tentacle-wiggle 2.4s ease-in-out infinite;
+}
+@keyframes wb-tentacle-wiggle {
+  0%, 100% { transform: scaleY(1) skewX(0deg); }
+  50%      { transform: scaleY(1.15) skewX(8deg); }
+}
+
+/* Phase intensifies the hydra — color shifts and faster rings. */
+.wb-hydra[data-phase="2"] .wb-hydra__core { animation-duration: 1.2s; filter: hue-rotate(-10deg); }
+.wb-hydra[data-phase="2"] .wb-hydra__ring { animation-duration: 5s; }
+.wb-hydra[data-phase="3"] .wb-hydra__core { animation-duration: 0.7s; filter: hue-rotate(-20deg) saturate(1.3); }
+.wb-hydra[data-phase="3"] .wb-hydra__ring { animation-duration: 2.5s; border-color: rgba(255, 65, 107, 0.7); box-shadow: 0 0 24px rgba(255, 65, 107, 0.6), inset 0 0 24px rgba(255, 65, 107, 0.3); }
+.wb-hydra[data-phase="3"] .wb-hydra__tentacle::before {
+  background: linear-gradient(180deg,
+    rgba(255, 65, 107, 0.95) 0%,
+    rgba(255, 65, 107, 0.55) 50%,
+    rgba(255, 65, 107, 0.0) 100%);
+  box-shadow: 0 0 12px rgba(255, 65, 107, 0.7);
+}
+
+/* Hit flash — applied for ~120ms when the boss takes damage. */
+.wb-hydra.is-hit .wb-hydra__core {
+  background: radial-gradient(circle at center, #ffffff 0%, #ffd75a 60%, #ffffff 100%);
+  filter: brightness(1.8);
+}
+
+/* ----- Weak points -------------------------------------------------------- */
+.wb-weakpoint {
+  position: absolute;
+  width: 38px;
+  height: 38px;
+  margin-left: -19px;
+  margin-top: -19px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 40% 35%, #ffffff 0%, #ffd75a 30%, #ff416b 70%, transparent 100%);
+  border: 2px solid #ffd75a;
+  box-shadow:
+    0 0 18px rgba(255, 215, 90, 0.85),
+    0 0 36px rgba(255, 65, 107, 0.55),
+    inset 0 0 10px rgba(255, 255, 255, 0.45);
+  pointer-events: none;
+  animation: wb-weakpoint-pulse 0.9s ease-in-out infinite;
+  z-index: 4;
+}
+@keyframes wb-weakpoint-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50%      { transform: scale(1.18); opacity: 0.85; }
+}
+.wb-weakpoint.is-dying {
+  animation: wb-weakpoint-die 220ms ease-out forwards;
+}
+@keyframes wb-weakpoint-die {
+  0%   { transform: scale(1); opacity: 1; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+
+/* ----- Player ------------------------------------------------------------- */
+.wb-player {
+  position: absolute;
+  width: 26px;
+  height: 26px;
+  margin-left: -13px;
+  margin-top: -13px;
+  z-index: 6;
+  pointer-events: none;
+  will-change: left, top;
+}
+.wb-player__body {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 40% 30%, #ffffff 0%, #22f6ff 30%, #1a7c8c 70%, #0a3a44 100%);
+  border: 2px solid #22f6ff;
+  box-shadow:
+    0 0 14px rgba(34, 246, 255, 0.9),
+    inset 0 0 6px rgba(255, 255, 255, 0.45);
+  /* Hex-ish shape via clip-path. */
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+}
+.wb-player.is-hit .wb-player__body {
+  background: radial-gradient(circle at center, #ffffff 0%, #ff416b 50%, #6b1933 100%);
+  animation: wb-shake 200ms ease-in-out;
+}
+@keyframes wb-shake {
+  0%, 100% { transform: translate(0, 0); }
+  25%      { transform: translate(-2px, 1px); }
+  50%      { transform: translate(2px, -1px); }
+  75%      { transform: translate(-1px, 2px); }
+}
+.wb-player.is-iframes .wb-player__body {
+  opacity: 0.45;
+  animation: wb-iframes 100ms steps(2, end) infinite;
+}
+@keyframes wb-iframes {
+  0%   { opacity: 0.25; }
+  100% { opacity: 0.75; }
+}
+
+/* ----- Projectiles -------------------------------------------------------- */
+.wb-bullet {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  margin-left: -4px;
+  margin-top: -4px;
+  border-radius: 50%;
+  background: radial-gradient(circle at center, #ffffff 0%, #22f6ff 60%, transparent 100%);
+  box-shadow: 0 0 8px rgba(34, 246, 255, 0.95), 0 0 18px rgba(34, 246, 255, 0.55);
+  pointer-events: none;
+  z-index: 5;
+  will-change: left, top;
+}
+.wb-bullet--boss {
+  width: 14px;
+  height: 14px;
+  margin-left: -7px;
+  margin-top: -7px;
+  background: radial-gradient(circle at center, #ffffff 0%, #ff416b 60%, transparent 100%);
+  box-shadow: 0 0 10px rgba(255, 65, 107, 0.95), 0 0 22px rgba(255, 65, 107, 0.55);
+}
+
+/* ----- Telegraph (boss attack windup) ------------------------------------ */
+.wb-telegraph {
+  position: absolute;
+  margin-left: -50%;
+  margin-top: -50%;
+  border: 2px dashed rgba(255, 65, 107, 0.85);
+  background: radial-gradient(circle at center, rgba(255, 65, 107, 0.18), transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 3;
+  animation: wb-telegraph-pulse 0.5s ease-in-out infinite;
+}
+@keyframes wb-telegraph-pulse {
+  0%, 100% { opacity: 0.55; transform: scale(0.95); }
+  50%      { opacity: 1;    transform: scale(1.02); }
+}
+
+/* ----- Phase banner ------------------------------------------------------- */
+.wb-phase-banner {
+  position: absolute;
+  left: 50%;
+  top: 22%;
+  transform: translate(-50%, -50%);
+  font-family: "Orbitron", var(--nfr-font-ui);
+  font-size: clamp(28px, 4vw, 44px);
+  font-weight: 800;
+  letter-spacing: 0.22em;
+  color: var(--nfr-violet);
+  text-shadow:
+    0 0 8px var(--nfr-violet),
+    0 0 22px rgba(167, 108, 255, 0.7),
+    0 0 44px rgba(255, 65, 107, 0.5);
+  pointer-events: none;
+  z-index: 20;
+  white-space: nowrap;
+  animation: wb-phase-banner 1.6s ease-out forwards;
+}
+@keyframes wb-phase-banner {
+  0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.6); }
+  20%  { opacity: 1; transform: translate(-50%, -50%) scale(1.05); }
+  80%  { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.2); }
+}
+
+/* ----- Tutorial hint (first 4 seconds) ------------------------------------ */
+.wb-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  padding: 8px 16px;
+  font-size: var(--nfr-text-sm);
+  letter-spacing: 0.16em;
+  color: var(--nfr-ink-dim);
+  background: rgba(8, 12, 22, 0.78);
+  border: 1px solid rgba(34, 246, 255, 0.35);
+  pointer-events: none;
+  z-index: 12;
+  animation: wb-hint-fade 5s ease-in-out forwards;
+}
+@keyframes wb-hint-fade {
+  0%   { opacity: 0; }
+  10%  { opacity: 1; }
+  80%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* ----- End screen (victory / defeat) -------------------------------------- */
+.wb-end {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(92%, 520px);
+  padding: 28px 28px 22px;
+  background: var(--nfr-surface-modal);
+  border: 1px solid rgba(34, 246, 255, 0.5);
+  clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px));
+  z-index: 30;
+  pointer-events: auto;
+  animation: nfr-panel-in 280ms var(--nfr-ease-bounce) backwards;
+  text-align: center;
+}
+.wb-end--victory { border-color: var(--nfr-gold-60); }
+.wb-end--defeat  { border-color: var(--nfr-red-60); }
+.wb-end__title {
+  font-family: "Orbitron", var(--nfr-font-ui);
+  font-size: clamp(24px, 3vw, 34px);
+  font-weight: 800;
+  letter-spacing: 0.22em;
+  margin: 0 0 6px;
+  color: var(--nfr-gold);
+  text-shadow: var(--nfr-glow-gold-mid);
+}
+.wb-end--defeat .wb-end__title { color: var(--nfr-red); text-shadow: var(--nfr-glow-red-mid); }
+.wb-end__time {
+  font-family: "Orbitron", var(--nfr-font-ui);
+  font-size: clamp(18px, 2vw, 22px);
+  letter-spacing: 0.14em;
+  color: var(--nfr-cyan);
+  text-shadow: var(--nfr-glow-cyan-tight);
+  font-variant-numeric: tabular-nums;
+  margin: 4px 0 10px;
+}
+.wb-end__pb {
+  font-size: var(--nfr-text-sm);
+  letter-spacing: 0.20em;
+  color: var(--nfr-gold);
+  text-shadow: var(--nfr-glow-gold-tight);
+  margin-bottom: 14px;
+  animation: wb-pb-flash 1.2s ease-in-out infinite;
+}
+@keyframes wb-pb-flash {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.55; }
+}
+.wb-end__rewards {
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+  margin: 10px 0 18px;
+  font-size: var(--nfr-text-md, 14px);
+  letter-spacing: 0.14em;
+  color: var(--nfr-ink);
+}
+.wb-end__reward {
+  padding: 6px 14px;
+  border: 1px solid rgba(34, 246, 255, 0.4);
+  background: rgba(34, 246, 255, 0.06);
+}
+.wb-end__reward .num {
+  color: var(--nfr-gold);
+  font-weight: 700;
+  text-shadow: var(--nfr-glow-gold-tight);
+  margin-right: 4px;
+}
+.wb-end__actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
+/* ----- Briefing modal (pre-engage) ---------------------------------------- */
+.wb-briefing__sub {
+  font-size: var(--nfr-text-sm);
+  letter-spacing: 0.16em;
+  color: var(--nfr-ink-dim);
+  margin-bottom: 14px;
+  text-align: center;
+}
+.wb-briefing__body {
+  font-size: var(--nfr-text-sm);
+  line-height: 1.55;
+  color: var(--nfr-ink);
+  margin: 0 0 18px;
+}
+.wb-briefing__stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 14px;
+  font-size: var(--nfr-text-sm);
+  letter-spacing: 0.12em;
+  margin-bottom: 16px;
+  color: var(--nfr-ink-dim);
+}
+.wb-briefing__stats strong {
+  color: var(--nfr-cyan);
+  text-shadow: var(--nfr-glow-cyan-tight);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.wb-briefing__lb {
+  border-top: 1px solid rgba(34, 246, 255, 0.18);
+  padding-top: 14px;
+  margin-top: 8px;
+}
+.wb-briefing__lb-title {
+  font-size: var(--nfr-text-xs);
+  letter-spacing: 0.24em;
+  color: var(--nfr-ink-dim);
+  margin-bottom: 8px;
+}
+.wb-briefing__lb-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+.wb-briefing__lb-row {
+  display: grid;
+  grid-template-columns: 32px 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 5px 10px;
+  background: rgba(34, 246, 255, 0.04);
+  border: 1px solid rgba(34, 246, 255, 0.12);
+  font-size: var(--nfr-text-sm);
+  font-variant-numeric: tabular-nums;
+}
+.wb-briefing__lb-row.is-current {
+  border-color: var(--nfr-gold-60);
+  background: rgba(255, 215, 90, 0.08);
+}
+.wb-briefing__lb-rank {
+  color: var(--nfr-ink-dim);
+  letter-spacing: 0.16em;
+  font-size: var(--nfr-text-xs);
+}
+.wb-briefing__lb-week {
+  color: var(--nfr-ink);
+  letter-spacing: 0.10em;
+}
+.wb-briefing__lb-time {
+  color: var(--nfr-cyan);
+  text-shadow: var(--nfr-glow-cyan-tight);
+  font-weight: 700;
+}
+.wb-briefing__lb-empty {
+  color: var(--nfr-ink-mute);
+  font-size: var(--nfr-text-sm);
+  letter-spacing: 0.14em;
+  text-align: center;
+  padding: 10px;
+}
+.wb-briefing__actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+/* Reduced motion: kill background drift + decorative pulsing. */
+@media (prefers-reduced-motion: reduce) {
+  .wb-root::before { animation: none; }
+  .wb-arena::before { animation: none; }
+  .wb-hydra__core,
+  .wb-hydra__ring,
+  .wb-hydra__tentacle::before,
+  .wb-weakpoint,
+  .wb-telegraph,
+  .wb-hud__value.is-critical,
+  .wb-end__pb { animation: none; }
+}

@@ -24,6 +24,7 @@ import { todayUtcDate } from '../config/QuestDefs';
 import { AdManager } from '../platform/AdManager';
 import { CosmeticSystem } from '../systems/CosmeticSystem';
 import { openRefineryPanel, openMissionBoard, openPrestigePanel, openZonePanel } from '../ui/FactoryPanels';
+import { openWeeklyBossPanel } from '../ui/WeeklyBossPanel';
 import { ensureCommonFX, applyGlow, FACTORY_BG_KEY, VIGNETTE_KEY } from '../systems/NeonFX';
 import { RetentionSystem } from '../systems/RetentionSystem';
 import { WelcomeBack } from '../ui/WelcomeBack';
@@ -1286,6 +1287,11 @@ export class FactoryScene extends Phaser.Scene {
         }),
       ));
       col.appendChild(nfrActionBtn(Strings.refineryButton, 'violet', () => openRefineryPanel(this)));
+
+      // Weekly Boss (Signal Hydra) per blueprint §16.4. HTML/CSS-only
+      // raid mode — visible once tutorial is done so it doesn't crowd
+      // the early FTUE flow.
+      col.appendChild(nfrActionBtn(Strings.weeklyBossButton, 'red', () => openWeeklyBossPanel(this)));
 
       const contractsBtn = nfrActionBtn(Strings.missionBoardTitle, 'gold', () => openMissionBoard(this));
       const claimable = RetentionSystem.almostThere().missionsReadyToClaim;

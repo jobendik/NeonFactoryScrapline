@@ -14,7 +14,7 @@ import {
   type RaidZoneId,
 } from '../config/ScraplineDefs';
 
-export const SAVE_VERSION = 13;
+export const SAVE_VERSION = 14;
 
 export type QualityPreset = 'low' | 'medium' | 'high';
 const SAVE_KEY = 'save';
@@ -164,6 +164,14 @@ export interface SaveData {
   // "survived longer than last" comeback medal.
   consecutiveLosses: number;
   previousRaidElapsedSec: number;
+  // Weekly Boss (Signal Hydra) — blueprint §16.4. Local-only fastest-kill
+  // leaderboard (no backend), keyed by ISO week. Optional so older save
+  // shapes load cleanly; WeeklyBossSystem.ensureSaveShape() seeds the slice
+  // on first read.
+  weeklyBoss?: {
+    history: { weekKey: string; killTimeMs: number }[];
+    totalKills: number;
+  };
 }
 
 function defaultFtueUnlocks(): FtueUnlocks {
@@ -241,6 +249,7 @@ export function createDefaultSave(): SaveData {
     seasonXp: 0,
     consecutiveLosses: 0,
     previousRaidElapsedSec: 0,
+    weeklyBoss: { history: [], totalKills: 0 },
     lastSave: Date.now(),
   };
 }
@@ -471,6 +480,24 @@ function migrateV12toV13(v12: MigratingSave): MigratingSave {
   };
 }
 
+// v13 → v14: Weekly Boss (Signal Hydra) adds the `weeklyBoss` slice
+// (per-week fastest-kill leaderboard + lifetime kill counter). Carry any
+// existing slice forward in case the field was already present on a forward-
+// compatible build; otherwise seed empty.
+function migrateV13toV14(v13: MigratingSave): MigratingSave {
+  const existing = (v13.weeklyBoss ?? {}) as { history?: unknown; totalKills?: unknown };
+  return {
+    ...v13,
+    version: 14,
+    weeklyBoss: {
+      history: Array.isArray(existing.history)
+        ? (existing.history as { weekKey: string; killTimeMs: number }[])
+        : [],
+      totalKills: typeof existing.totalKills === 'number' ? existing.totalKills : 0,
+    },
+  };
+}
+
 // Migration path - new versions add their case here. Old saves walk forward step
 // by step. Per the M10 gate: a v0 save (no `version` field, written before
 // versioning existed) is treated as a fresh save - we don't try to merge
@@ -496,6 +523,7 @@ function migrate(raw: unknown): SaveData {
   if (save.version === 10) save = migrateV10toV11(save);
   if (save.version === 11) save = migrateV11toV12(save);
   if (save.version === 12) save = migrateV12toV13(save);
+  if (save.version === 13) save = migrateV13toV14(save);
 
   if (save.version === SAVE_VERSION) {
     return save as unknown as SaveData;
