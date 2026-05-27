@@ -4,6 +4,7 @@ import { Enemy } from '../entities/Enemy';
 import type { EnemyKind } from '../config/EnemyDefs';
 import type { Rng } from '../core/Rng';
 import { QualityManager } from './QualityManager';
+import { DailyQuestSystem } from './DailyQuestSystem';
 
 // Spawn director per blueprint §7.2:
 //   - Spawn cooldown ramps from 0.95s -> 0.24s as the raid progresses (intensity 0..1).
@@ -77,9 +78,10 @@ export class WaveDirector {
     this.eliteSpawned = false;
     this.infestationWave = !!opts?.infestationWave;
     this.infestSpawnTimer = Balance.infestation.firstWaveDelaySec;
+    const goblinMult = DailyQuestSystem.getModifier()?.id === 'scrap_storm' ? 3 : 1;
     this.lootGoblinTimer = this.rng.range(
-      Balance.enemies.lootGoblin.spawnIntervalMin,
-      Balance.enemies.lootGoblin.spawnIntervalMax,
+      Balance.enemies.lootGoblin.spawnIntervalMin / goblinMult,
+      Balance.enemies.lootGoblin.spawnIntervalMax / goblinMult,
     );
     this.extractionOpen = false;
   }
@@ -117,9 +119,10 @@ export class WaveDirector {
     this.lootGoblinTimer -= dt;
     if (this.lootGoblinTimer <= 0) {
       this.spawnOne('lootGoblin');
+      const goblinMult = DailyQuestSystem.getModifier()?.id === 'scrap_storm' ? 3 : 1;
       this.lootGoblinTimer = this.rng.range(
-        Balance.enemies.lootGoblin.spawnIntervalMin,
-        Balance.enemies.lootGoblin.spawnIntervalMax,
+        Balance.enemies.lootGoblin.spawnIntervalMin / goblinMult,
+        Balance.enemies.lootGoblin.spawnIntervalMax / goblinMult,
       );
     }
 
@@ -153,8 +156,10 @@ export class WaveDirector {
     // Boss wave (§7.3 greed x3): spawn a single elite the first time we cross
     // a step that calls for one. The eliteSpawned latch ensures we don't
     // re-summon on every frame after the threshold.
-    if (!this.eliteSpawned && esc.eliteCount > 0) {
-      for (let i = 0; i < esc.eliteCount; i++) this.spawnOne('elite');
+    const eliteEarly = DailyQuestSystem.getModifier()?.id === 'core_bloom';
+    if (!this.eliteSpawned && (esc.eliteCount > 0 || (eliteEarly && this.greedStep >= 3))) {
+      const eliteCount = esc.eliteCount > 0 ? esc.eliteCount : 1;
+      for (let i = 0; i < eliteCount; i++) this.spawnOne('elite');
       this.eliteSpawned = true;
     }
 

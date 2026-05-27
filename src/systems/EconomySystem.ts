@@ -3,6 +3,8 @@ import { saveSystem } from '../platform/SaveSystem';
 import { InfestationSystem } from './InfestationSystem';
 import { RefinerySystem } from './RefinerySystem';
 import { RetentionSystem } from './RetentionSystem';
+import { DailyQuestSystem } from './DailyQuestSystem';
+import { ResearchSystem } from './ResearchSystem';
 
 // EconomySystem centralizes the few rules that touch the player wallet:
 //   - SPM formula per blueprint §8.7
@@ -33,6 +35,8 @@ export const Economy = {
     const droneLevel = Math.max(0, save.upgrades.drone);
     const boostActive = opts?.boostActive ?? save.adState.factoryBoostActiveUntilMs > Date.now();
     const boost = boostActive ? Balance.economy.factoryBoostMult : 1;
+    const dailyMod = DailyQuestSystem.getModifier();
+    const dailySpm = dailyMod?.id === 'scrap_storm' ? 1.25 : 1;
     const infest = clampInfestation(opts?.infestationRatio ?? InfestationSystem.getInfestationRatio());
     // Refinery + prestige multipliers compose so offline production benefits
     // from Scrap Catalysts and Cyber-Cores too, not just raid loot.
@@ -45,6 +49,7 @@ export const Economy = {
       genLevel *
       (1 + droneLevel * Balance.economy.spm.drone) *
       boost *
+      dailySpm *
       (1 - infest) *
       globalMult
     );
@@ -101,7 +106,7 @@ export const Economy = {
     const last = save.lastSave || nowMs;
     if (last >= nowMs) return 0;
     const elapsedSec = (nowMs - last) / 1000;
-    const cappedSec = Math.min(elapsedSec, RefinerySystem.offlineCapHours() * 3600);
+    const cappedSec = Math.min(elapsedSec, RefinerySystem.offlineCapHours() * ResearchSystem.offlineCapMult() * 3600);
     if (cappedSec <= 0) return 0;
     const spm = Economy.computeSpm();
     return Math.floor(spm * (cappedSec / 60));

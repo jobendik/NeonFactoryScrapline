@@ -8,6 +8,7 @@
 
 import type { UpgradeLevels } from '../core/types';
 import { Balance } from './Balance';
+import { DailyQuestSystem } from '../systems/DailyQuestSystem';
 
 export type UpgradeKey = keyof UpgradeLevels;
 
@@ -92,7 +93,10 @@ export function nextCost(key: UpgradeKey, currentLevel: number): number {
   const cfg = Balance.economy.upgrades[key];
   const def = UpgradeDefs[key];
   const purchases = Math.max(0, currentLevel - def.startLevel);
-  return Math.round(cfg.base * Math.pow(cfg.scale, purchases));
+  const cost = Math.round(cfg.base * Math.pow(cfg.scale, purchases));
+  const modifier = DailyQuestSystem.getModifier();
+  if (key === 'drone' && modifier?.id === 'drone_festival') return Math.max(1, Math.round(cost * 0.75));
+  return cost;
 }
 
 export function nextMilestone(key: UpgradeKey, currentLevel: number): { level: number; text: string } | null {

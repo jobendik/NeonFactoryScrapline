@@ -45,6 +45,7 @@ function rewardForDay(day: number): { scrap: number; cores: number; cosmetic: bo
 }
 
 export const StreakSystem = {
+  rewardForDay,
   // Returns the current streak day (0 when never advanced).
   getDay(): number {
     return saveSystem.get().daily.streakDay;

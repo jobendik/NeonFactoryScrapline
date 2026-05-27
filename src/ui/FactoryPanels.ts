@@ -20,6 +20,8 @@ import { UIOverlay, el, btn } from './overlay/UIOverlay';
 import { CORE_ICON } from './overlay/Icons';
 import { DEFAULT_RAID_ZONE_ID, MaterialDefs, createEmptyMaterials } from '../config/ScraplineDefs';
 import { RaidZoneSystem } from '../systems/RaidZoneSystem';
+import { ResearchSystem, ResearchDefs, RESEARCH_ORDER } from '../systems/ResearchSystem';
+import { DroneMissionSystem, DroneMissionDefs, DRONE_MISSION_ORDER } from '../systems/DroneMissionSystem';
 
 type Teardown = () => void;
 
@@ -326,4 +328,125 @@ function performPrestige(): void {
   save.lastSave = Date.now();
   save.dailySeedAttempted = '';
   void todayUtcDate;
+}
+
+
+function fmtDuration(ms: number): string {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
+function fmtRemain(ms: number): string {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+export function openResearchPanel(scene: Phaser.Scene, onClosed?: () => void): Teardown {
+  ResearchSystem.ensureSaveShape();
+  const completed = ResearchSystem.checkCompletion();
+  if (completed) void saveSystem.persist();
+  const panel = el('div', 'nfr-panel violet');
+  panel.style.minWidth = '640px';
+  const title = el('h1', 'nfr-panel__title', Strings.researchTitle);
+  const sub = el('div', 'nfr-panel__subtitle');
+  sub.textContent = `${Strings.summaryScrap}: ${Economy.getWallet().scrap}  |  ${Strings.summaryCores}: ${Economy.getWallet().cores}`;
+  panel.appendChild(title);
+  panel.appendChild(sub);
+  const active = ResearchSystem.getActive();
+  if (active) {
+    const activeEl = el('div', 'nfr-panel__subtitle');
+    activeEl.style.color = 'var(--nfr-green)';
+    activeEl.textContent = `${ResearchDefs[active.id].name} · ${fmtRemain(ResearchSystem.getRemainingMs())}`;
+    panel.appendChild(activeEl);
+  }
+  const body = el('div', 'nfr-panel__body');
+  let dismiss: Teardown = () => undefined;
+  for (const id of RESEARCH_ORDER) {
+    const def = ResearchDefs[id];
+    const row = el('div', 'nfr-row');
+    const main = el('div', 'nfr-row__main');
+    main.appendChild(el('div', 'nfr-row__title', def.name));
+    main.appendChild(el('div', 'nfr-row__effect', def.desc));
+    const cost = el('div', 'nfr-row__meta', `${fmtDuration(def.durationMs)} · ${def.costScrap} Scrap${def.costCores > 0 ? ` · ${def.costCores} Cores` : ''}`);
+    main.appendChild(cost);
+    row.appendChild(main);
+    if (ResearchSystem.isCompleted(id)) {
+      row.classList.add('is-owned');
+      row.appendChild(el('div', 'nfr-row__status', Strings.researchCompleted));
+    } else if (active?.id === id) {
+      row.classList.add('is-owned');
+      row.appendChild(el('div', 'nfr-row__status', Strings.researchInProgress));
+    } else {
+      const available = ResearchSystem.isAvailable(id);
+      if (!available) row.classList.add('is-locked');
+      row.appendChild(btn(Strings.researchStart, 'violet', () => {
+        if (ResearchSystem.startResearch(id)) {
+          void saveSystem.persist();
+          dismiss();
+          openResearchPanel(scene, onClosed);
+        }
+      }, { disabled: !available, size: 'sm' }));
+    }
+    body.appendChild(row);
+  }
+  panel.appendChild(body);
+  const footer = el('div', 'nfr-panel__footer');
+  footer.appendChild(btn(Strings.researchClose, 'violet', () => dismiss(), { size: 'lg' }));
+  panel.appendChild(footer);
+  dismiss = UIOverlay.mountModal(scene, panel, { dismissOnBackdrop: true, onDismiss: () => onClosed?.() });
+  return dismiss;
+}
+
+export function openDroneBayPanel(scene: Phaser.Scene, onClosed?: () => void): Teardown {
+  DroneMissionSystem.ensureSaveShape();
+  const completed = DroneMissionSystem.checkCompletions();
+  if (completed.length > 0) void saveSystem.persist();
+  const panel = el('div', 'nfr-panel cyan');
+  panel.style.minWidth = '700px';
+  panel.appendChild(el('h1', 'nfr-panel__title', Strings.droneBayTitle));
+  panel.appendChild(el('div', 'nfr-panel__subtitle', `${Strings.droneBaySlots}${DroneMissionSystem.getSlotCount()}`));
+  const body = el('div', 'nfr-panel__body');
+  let dismiss: Teardown = () => undefined;
+  const active = DroneMissionSystem.getActive();
+  const emptySlot = [...Array(DroneMissionSystem.getSlotCount()).keys()].find(i => !active.some(m => m.slotIdx === i)) ?? -1;
+  for (let slotIdx = 0; slotIdx < DroneMissionSystem.getSlotCount(); slotIdx++) {
+    const slot = active.find(m => m.slotIdx === slotIdx);
+    const row = el('div', 'nfr-row');
+    const main = el('div', 'nfr-row__main');
+    main.appendChild(el('div', 'nfr-row__title', `${Strings.droneBaySlot} ${slotIdx + 1}`));
+    main.appendChild(el('div', 'nfr-row__effect', slot ? DroneMissionDefs[slot.missionId].name : Strings.droneBayIdle));
+    main.appendChild(el('div', 'nfr-row__meta', slot ? fmtRemain(DroneMissionSystem.getTimeRemainingMs(slotIdx)) : Strings.droneBayReady));
+    row.appendChild(main);
+    body.appendChild(row);
+  }
+  for (const id of DRONE_MISSION_ORDER) {
+    const def = DroneMissionDefs[id];
+    const row = el('div', 'nfr-row');
+    const main = el('div', 'nfr-row__main');
+    main.appendChild(el('div', 'nfr-row__title', def.name));
+    main.appendChild(el('div', 'nfr-row__effect', def.desc));
+    main.appendChild(el('div', 'nfr-row__meta', fmtDuration(DroneMissionSystem.getMissionDurationMs(id))));
+    row.appendChild(main);
+    row.appendChild(btn(Strings.droneBayLaunch, 'cyan', () => {
+      if (DroneMissionSystem.launch(id, emptySlot)) {
+        void saveSystem.persist();
+        dismiss();
+        openDroneBayPanel(scene, onClosed);
+      }
+    }, { disabled: emptySlot < 0, size: 'sm' }));
+    body.appendChild(row);
+  }
+  panel.appendChild(body);
+  const footer = el('div', 'nfr-panel__footer');
+  footer.appendChild(btn(Strings.droneBayClose, 'cyan', () => dismiss(), { size: 'lg' }));
+  panel.appendChild(footer);
+  dismiss = UIOverlay.mountModal(scene, panel, { dismissOnBackdrop: true, onDismiss: () => onClosed?.() });
+  return dismiss;
 }

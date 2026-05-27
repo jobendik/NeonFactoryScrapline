@@ -10,6 +10,7 @@
 
 import { DRAWABLE_CARDS, type CardDef, type CardRarity } from '../config/CardDefs';
 import { Balance } from '../config/Balance';
+import { ResearchSystem } from './ResearchSystem';
 
 export interface RarityWeights {
   common: number;
@@ -52,16 +53,15 @@ export class DraftSystem {
     this.firedDrafts.add(index);
   }
 
-  // Draws three rarity-weighted cards from the drawable pool. Cards already
-  // shown this run are excluded. If a tier is exhausted, the draw falls back
-  // to the next-lower tier (epic → rare → common) so we always return three.
+  // Draws rarity-weighted cards from the drawable pool. Cards already shown
+  // this run are excluded. Augment Array research increases the offer count.
   drawCards(draftIndex: number): CardDef[] {
     const weights =
       draftIndex === 0
         ? Balance.cards.rarityWeights.first
         : Balance.cards.rarityWeights.second;
     const cards: CardDef[] = [];
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < ResearchSystem.draftOfferCount(); i++) {
       const c = this.drawOne(weights, cards.map(x => x.id));
       if (!c) break;
       cards.push(c);

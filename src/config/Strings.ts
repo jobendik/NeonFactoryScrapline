@@ -364,6 +364,61 @@ const StringsEn = {
   weeklyBossRetry: 'RETRY',
   weeklyBossTutorialHint:
     'WASD / Arrows to move · Click / Space to fire · Strike pulsing weak points.',
+
+  researchTitle: 'RESEARCH LAB',
+  researchButton: 'RESEARCH',
+  researchCompleted: 'COMPLETE',
+  researchInProgress: 'ACTIVE',
+  researchStart: 'START',
+  researchClose: 'CLOSE',
+
+  droneBayTitle: 'DRONE BAY',
+  droneBayButton: 'DRONE BAY',
+  droneBaySlots: 'Slots: ',
+  droneBaySlot: 'SLOT',
+  droneBayIdle: 'IDLE',
+  droneBayReady: 'Ready for launch',
+  droneBayLaunch: 'LAUNCH',
+  droneBayClose: 'CLOSE',
+  droneBayMissionComplete: 'drone missions returned',
+
+  fortuneWheelTitle: 'FORTUNE WHEEL',
+  fortuneWheelButton: 'FORTUNE WHEEL',
+  fortuneWheelSubtitle: 'Watch an ad to spin once per day.',
+  fortuneWheelSpin: 'SPIN',
+  fortuneWheelReady: 'Wheel armed — claim your daily spin.',
+  fortuneWheelWonPrefix: 'WON · ',
+  fortuneWheelClose: 'CLOSE',
+  fortuneWheelAdTitle: 'SPIN THE WHEEL?',
+  fortuneWheelAdDesc: 'Watch a short ad to take your daily spin.',
+
+  dailyLoginTitle: 'DAILY REWARDS',
+  dailyLoginSubtitle: 'Claim your streak rewards one day at a time.',
+  dailyRewardsButton: 'DAILY REWARDS',
+  dailyLoginDay: 'DAY',
+  dailyLoginToday: 'TODAY',
+  dailyLoginFuture: 'LOCKED',
+  dailyLoginClose: 'CLOSE',
+  dailyLoginEmpty: 'No bonus',
+
+  offlineRewardTitle: 'OFFLINE EARNINGS',
+  offlineRewardAmountPrefix: '+',
+  offlineRewardAmountSuffix: ' Scrap generated while you were away',
+  offlineRewardBody: 'Collect now or watch an ad for 2× payout.',
+  offlineRewardCollect: 'COLLECT',
+  offlineRewardDouble: 'WATCH AD → 2×',
+  offlineRewardAdTitle: 'DOUBLE OFFLINE EARNINGS?',
+  offlineRewardAdDesc: 'Watch a short ad to double your offline Scrap.',
+
+  buffFactoryBoost: 'FACTORY BOOST',
+  buffDoublePayday: 'DOUBLE PAYDAY',
+  buffComebackBonus: 'COMEBACK BONUS',
+
+  settingsExportButton: 'EXPORT SAVE',
+  settingsImportButton: 'IMPORT SAVE',
+  settingsExportSuccess: 'Save exported',
+  settingsImportSuccess: 'Save imported — reloading',
+  settingsImportError: 'Import failed',
 };
 
 export type Locale = 'en' | 'no' | 'es' | 'pt' | 'de' | 'fr';

@@ -160,6 +160,14 @@ export const InfestationSystem = {
   },
 
   // M20 ad path stub. Returns true if it cleared anything.
+  clearOneInfestation(): boolean {
+    const save = saveSystem.get();
+    const slot = save.infestation.machineIds.pop();
+    if (slot === undefined) return false;
+    bus.emit(Events.INFESTATION_CLEARED, slot);
+    return true;
+  },
+
   clearAllInfestation(): boolean {
     const save = saveSystem.get();
     if (save.infestation.machineIds.length === 0) return false;

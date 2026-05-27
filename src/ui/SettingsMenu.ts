@@ -16,6 +16,7 @@ import { cosmeticsOfKind, type CosmeticKind, type CosmeticDef } from '../config/
 import { CosmeticSystem } from '../systems/CosmeticSystem';
 import { AchievementSystem, AchievementDefs, ACHIEVEMENT_ORDER } from '../systems/AchievementSystem';
 import { UIOverlay, el, btn } from './overlay/UIOverlay';
+import { ToastManager } from './overlay/ToastManager';
 
 type Channel = keyof AudioVolumes;
 
@@ -29,6 +30,7 @@ export class SettingsMenu {
   // Pause/resume tracking — only resume scenes WE paused so a draft
   // modal's lifecycle isn't trampled.
   private pausedSceneKeys: string[] = [];
+  private toastMgr: ToastManager | null = null;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -320,6 +322,8 @@ export class SettingsMenu {
     const row2 = el('div', 'nfr-panel__row');
     row2.appendChild(btn('CONTROLS', 'cyan', () => this.openControlsModal(), { size: 'sm' }));
     row2.appendChild(btn('CREDITS', 'cyan', () => this.openCreditsModal(), { size: 'sm' }));
+    row2.appendChild(btn(Strings.settingsExportButton, 'gold', () => this.exportSave(), { size: 'sm' }));
+    row2.appendChild(btn(Strings.settingsImportButton, 'violet', () => this.importSave(), { size: 'sm' }));
     row2.appendChild(btn('RESET SAVE', 'red', () => this.openResetSaveConfirm(), { size: 'sm' }));
     section.appendChild(row2);
 
@@ -526,6 +530,45 @@ export class SettingsMenu {
     });
     dismissSelf = d;
     this.dismissStack.push(d);
+  }
+
+
+
+  private toast(text: string, variant: 'info' | 'alert' | 'reward' = 'info'): void {
+    this.toastMgr ??= new ToastManager(this.scene);
+    this.toastMgr.show({ text, variant, duration: 2800 });
+  }
+
+  private exportSave(): void {
+    const blob = new Blob([JSON.stringify(saveSystem.get(), null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'neon-factory-scrapline-save.json';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+    this.toast(Strings.settingsExportSuccess, 'reward');
+  }
+
+  private importSave(): void {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'application/json';
+    input.addEventListener('change', async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const parsed = JSON.parse(text);
+        const ok = await saveSystem.importData(parsed);
+        if (!ok) throw new Error('invalid');
+        this.toast(Strings.settingsImportSuccess, 'reward');
+        setTimeout(() => window.location.reload(), 700);
+      } catch {
+        this.toast(Strings.settingsImportError, 'alert');
+      }
+    });
+    input.click();
   }
 
   private openResetSaveConfirm(): void {

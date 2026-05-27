@@ -43,7 +43,6 @@ export class BootScene extends Phaser.Scene {
       // saveSystem's transient slot.
       const offlineScrap = Economy.computeOfflineScrap();
       if (offlineScrap > 0) {
-        Economy.bankLoot(offlineScrap, 0);
         saveSystem.setPendingOfflineScrap(offlineScrap);
       }
 

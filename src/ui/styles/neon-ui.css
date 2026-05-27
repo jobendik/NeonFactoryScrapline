@@ -2564,3 +2564,28 @@
   z-index: 901;
   animation: nfr-radial-ring-out 520ms ease-out forwards;
 }
+
+
+.nfr-buffbar {
+  position: absolute;
+  left: 50%;
+  top: 84px;
+  transform: translateX(-50%);
+  display: none;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  max-width: min(70vw, 760px);
+  pointer-events: none;
+}
+
+.nfr-buffbar__chip {
+  padding: 5px 10px;
+  border: 1px solid currentColor;
+  background: rgba(6, 10, 22, 0.82);
+  font-family: var(--nfr-font-display);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}

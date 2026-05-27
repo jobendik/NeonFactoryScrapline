@@ -26,6 +26,8 @@ import { createDefaultRunMods, type RunMods } from '../systems/RunMods';
 import { OperatorSystem } from '../systems/OperatorSystem';
 import { InfestationSystem } from '../systems/InfestationSystem';
 import { DailyQuestSystem } from '../systems/DailyQuestSystem';
+import { ResearchSystem } from '../systems/ResearchSystem';
+import { EventSystem } from '../systems/EventSystem';
 import { LeaderboardSystem } from '../systems/LeaderboardSystem';
 import { todayUtcDate as todayUtcDateForLeaderboard } from '../config/QuestDefs';
 import type { CardDef } from '../config/CardDefs';
@@ -411,6 +413,8 @@ export class RaidScene extends Phaser.Scene {
     // card picks layer cleanly on top of operator base values.
     this.runMods = createDefaultRunMods();
     OperatorSystem.applyOperatorMods(this.runMods);
+    ResearchSystem.applyToRunMods(this.runMods);
+    this.applyDailyModifierToRunMods();
     // Refinery — Drone Overclock adds +1 starting drone permanently.
     this.runMods.bonusWeaponTargets += RefinerySystem.bonusStartingDrones();
     this.magnetStormRemaining = 0;
@@ -419,6 +423,7 @@ export class RaidScene extends Phaser.Scene {
     this.draftSystem = new DraftSystem(this.rng);
     this.player.applyRunMods(this.runMods);
     this.weapons.applyRunMods(this.runMods);
+    this.extraction.setHoldTimeMult(this.runMods.extractHoldMult);
     this.draftActive = false;
     this.refreshOperatorOrbs();
 
@@ -452,6 +457,7 @@ export class RaidScene extends Phaser.Scene {
     card.apply(this.runMods);
     this.player.applyRunMods(this.runMods);
     this.weapons.applyRunMods(this.runMods);
+    this.extraction.setHoldTimeMult(this.runMods.extractHoldMult);
     // Magnet Storm grants a temporary high-radius window; pick adds 8s.
     if (this.runMods.magnetStormDurAdd > 0) {
       this.magnetStormRemaining += Balance.cards.magnetStormDurSec;
@@ -689,7 +695,7 @@ export class RaidScene extends Phaser.Scene {
       this.pickupScratch,
     );
     for (const p of nearPickups) {
-      if (p.active) p.updateMagnet(dt, this.player.x, this.player.y, magnetRadius);
+      if (p.active) p.updateMagnet(dt, this.player.x, this.player.y, magnetRadius, this.runMods.orbitPickups);
     }
 
     // Powerups magnetize on the same radius but with a separate, more
@@ -721,6 +727,24 @@ export class RaidScene extends Phaser.Scene {
     // World-pinned HTML popups (damage numbers / NEAR MISS / heal amounts)
     // re-project to camera space every frame.
     this.tickWorldPopups();
+  }
+
+
+  private applyDailyModifierToRunMods(): void {
+    const modifier = DailyQuestSystem.getModifier();
+    if (!modifier) return;
+    switch (modifier.id) {
+      case 'core_bloom':
+        this.runMods.coreChanceMult *= 1.5;
+        break;
+      case 'overclock_field':
+        this.runMods.speedMult *= 1.1;
+        this.runMods.enemySpeedMult *= 1.15;
+        break;
+      case 'magnetic_resonance':
+        this.runMods.magnetMult *= 1.5;
+        break;
+    }
   }
 
   // M20 EXTEND RUN — when the timer hits 0, optionally offer +30s before
@@ -1123,7 +1147,7 @@ export class RaidScene extends Phaser.Scene {
     // Lucky card bonus stacks additively on top of the upgrade-modified base.
     const coreChance = Math.min(
       1,
-      UpgradeEffects.coreDropChance(def.coreChance) + this.runMods.coreChanceBonus,
+      UpgradeEffects.coreDropChance(def.coreChance) * this.runMods.coreChanceMult + this.runMods.coreChanceBonus,
     );
     if (this.rng.next() < coreChance) {
       const p = this.pickups.get(ex, ey) as Pickup | null;
@@ -1504,6 +1528,9 @@ export class RaidScene extends Phaser.Scene {
       greedMult = this.greed.getMultiplier() * this.runMods.greedSurgeMult;
       scrap = Math.round(scrap * greedMult);
       cores = Math.round(cores * greedMult);
+      const event = EventSystem.getActiveEvent();
+      if (event?.scrapMult) scrap = Math.round(scrap * event.scrapMult);
+      if (event?.bonusCore) cores += event.bonusCore;
     } else {
       scrap = Math.floor(scrap * 0.5);
       cores = Math.floor(cores * 0.5);
