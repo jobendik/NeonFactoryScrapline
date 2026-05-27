@@ -1044,6 +1044,23 @@ export class FactoryScene extends Phaser.Scene {
     sfxCore();
     void saveSystem.persist();
     this.showHtmlToast(Strings.questRewardToast, 'gold', 3000);
+
+    // Retention Phase 3 — surface streak progress in a follow-up toast so the
+    // player sees the day-tier reward they just earned. Only fires when the
+    // streak actually advanced (skips same-day double-claim no-ops) and a
+    // bonus is attached to today's tier; the bare DAY counter alone is shown
+    // in the quest panel header so we don't double-toast on a no-bonus day.
+    const s = result.streak;
+    if (s && s.advanced) {
+      const parts: string[] = [];
+      if (s.rewardScrap > 0) parts.push(`+${s.rewardScrap} Scrap`);
+      if (s.rewardCores > 0) parts.push(`+${s.rewardCores} Core${s.rewardCores === 1 ? '' : 's'}`);
+      if (s.rewardCosmetic) parts.push('+1 Cosmetic Shard');
+      if (parts.length > 0) {
+        const msg = `${Strings.streakDayPrefix}${s.newStreakDay}${Strings.streakDaySuffix} · ${parts.join(', ')}`;
+        this.showHtmlToast(msg, 'green', 3500);
+      }
+    }
     this.buildQuestPanel();
   }
 

@@ -75,6 +75,8 @@ export class SummaryScene extends Phaser.Scene {
   private accountLevelAfter = 1;
   private comebackMedal: ComebackMedal | undefined = undefined;
   private nextBestAction = '';
+  private dailySeedScore: number | undefined = undefined;
+  private dailySeedNewBest = false;
 
   // Live DOM handles for the post-claim loot bump.
   private scrapValueEl: HTMLElement | null = null;
@@ -107,6 +109,8 @@ export class SummaryScene extends Phaser.Scene {
       this.accountLevelAfter = data.accountLevelAfter ?? PlayerXpSystem.getLevel();
       this.comebackMedal = data.comebackMedal;
       this.nextBestAction = data.nextBestAction ?? '';
+      this.dailySeedScore = data.dailySeedScore;
+      this.dailySeedNewBest = !!data.dailySeedNewBest;
     }
     this.doubleLootClaimed = false;
     this.scrapValueEl = null;
@@ -198,6 +202,13 @@ export class SummaryScene extends Phaser.Scene {
     if (!this.tutorial && this.comebackMedal) {
       const chip = this.buildMedalChip(this.comebackMedal);
       root.appendChild(chip);
+    }
+
+    // Retention Phase 3 — Daily-seed score chip. Only appears on a successful
+    // daily-seed extract. Highlights gold when it's a new personal best across
+    // the player's daily-seed history so the player knows the run mattered.
+    if (!this.tutorial && this.dailySeedScore !== undefined) {
+      root.appendChild(this.buildDailySeedChip(this.dailySeedScore, this.dailySeedNewBest));
     }
 
     // Buttons.
@@ -300,6 +311,17 @@ export class SummaryScene extends Phaser.Scene {
     chip.textContent = m.label;
     chip.style.color = m.color;
     chip.style.borderColor = m.color;
+    return chip;
+  }
+
+  private buildDailySeedChip(score: number, newBest: boolean): HTMLElement {
+    const chip = el('div', 'nfr-summary__medal-chip');
+    const color = newBest ? 'var(--nfr-gold)' : 'var(--nfr-violet)';
+    chip.textContent = newBest
+      ? `★ DAILY SEED — NEW BEST · ${score.toLocaleString()}`
+      : `◆ DAILY SEED · ${score.toLocaleString()}`;
+    chip.style.color = color;
+    chip.style.borderColor = color;
     return chip;
   }
 

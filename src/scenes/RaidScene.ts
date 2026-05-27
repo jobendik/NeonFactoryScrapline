@@ -1526,9 +1526,17 @@ export class RaidScene extends Phaser.Scene {
     // M19 — daily seed leaderboard. Only successful extracts on a daily-seed
     // raid count; tutorial and normal raids are filtered out. Score is the
     // banked Scrap (post-greed multiplier).
+    let dailySeedScore: number | undefined;
+    let dailySeedNewBest: boolean | undefined;
     if (this.mode === 'dailySeed' && state === 'extracted') {
       const todayIso = todayUtcDateForLeaderboard();
+      // Compute previous best *before* submitting so the comparison is fair.
+      // Defensive `?? []` in case an older corrupted save skipped migration.
+      const prevBest = (saveSystem.get().dailySeedHistory ?? [])
+        .reduce((acc, e) => (e.score > acc ? e.score : acc), 0);
       void LeaderboardSystem.submitScore(todayIso, scrap);
+      dailySeedScore = scrap;
+      dailySeedNewBest = scrap > prevBest;
     }
     // Mission Board events — extracted-with-cores, extracted-at-greed.
     if (state === 'extracted') {
@@ -1655,6 +1663,8 @@ export class RaidScene extends Phaser.Scene {
       accountLevelAfter: levelAfter,
       comebackMedal,
       nextBestAction,
+      dailySeedScore,
+      dailySeedNewBest,
     };
 
     // Small delay so the moment's tail visuals finish before the summary appears.

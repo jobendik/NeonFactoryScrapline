@@ -54,6 +54,10 @@ export interface RaidEndPayload {
   comebackMedal?: ComebackMedal;
   // Single-line "what to do next" hint for the next-best-action row.
   nextBestAction?: string;
+  // Retention Phase 3 — when the run was a daily-seed extraction, the score
+  // submitted and whether it beat every previous daily-seed best on record.
+  dailySeedScore?: number;
+  dailySeedNewBest?: boolean;
 }
 
 // Per-run performance stats shown on the result screen.
