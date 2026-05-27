@@ -1599,11 +1599,19 @@ export class RaidScene extends Phaser.Scene {
     }
     save2.previousRaidElapsedSec = runStats.elapsedSec;
 
-    // Determine comeback medal.
+    // Track personal-best run length (any outcome).
+    if (runStats.elapsedSec > save2.stats.bestRaid) {
+      save2.stats.bestRaid = runStats.elapsedSec;
+    }
+
+    // Determine comeback medal. Extraction medals take priority; time-based
+    // medals fire for any outcome so long as no higher-priority medal is set.
     let comebackMedal: ComebackMedal | undefined;
     if (state === 'extracted') {
       const timeLeft = this.timeRemaining;
-      if (save2.stats.extracts === 1) {
+      // successfulExtracts is incremented by updateFtueProgress before this
+      // block, so value === 1 means this is the very first extraction.
+      if (save2.successfulExtracts === 1) {
         comebackMedal = 'firstExtract';
       } else if (timeLeft <= 5) {
         comebackMedal = 'lastSecond';
@@ -1612,10 +1620,14 @@ export class RaidScene extends Phaser.Scene {
       } else if (!penaltyApplied) {
         comebackMedal = 'fullCargo';
       }
-    } else {
+    }
+    // Time-based medals apply to any outcome (failure or extraction) when no
+    // extraction medal was already awarded.
+    if (!comebackMedal) {
       if (runStats.elapsedSec > prevElapsed && prevElapsed > 0) {
         comebackMedal = 'longRun';
-      } else if (runStats.elapsedSec > save2.stats.bestRaid) {
+      } else if (runStats.elapsedSec === save2.stats.bestRaid && runStats.elapsedSec > 0) {
+        // bestRaid was just updated to this run's elapsed, so equality means new best.
         comebackMedal = 'personalBest';
       }
     }
