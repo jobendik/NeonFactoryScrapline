@@ -28,8 +28,11 @@ export const DRONE_MISSION_ORDER = [
   'rare_salvage',
 ] as const;
 
+/** Base scrap earned by a SCRAP RUN mission (multiplied by generator upgrade level). */
+const SCRAP_RUN_BASE = 200;
+
 export const DroneMissionDefs: Record<string, DroneMissionDef> = {
-  scrap_run: { id: 'scrap_run', name: 'SCRAP RUN', durationMs: 30 * MIN, desc: 'Returns with Scrap scaled by generator level.' },
+  scrap_run: { id: 'scrap_run', name: 'SCRAP RUN', durationMs: 30 * MIN, desc: `Returns with ${SCRAP_RUN_BASE}× gen level Scrap.` },
   core_hunt: { id: 'core_hunt', name: 'CORE HUNT', durationMs: 4 * HOUR, desc: 'Returns with 100 Scrap and 2 Cores.' },
   corruption_scan: { id: 'corruption_scan', name: 'CORRUPTION SCAN', durationMs: 8 * HOUR, desc: 'Returns with loot and clears 1 infested machine.' },
   rare_salvage: { id: 'rare_salvage', name: 'RARE SALVAGE', durationMs: 12 * HOUR, desc: 'Long mission with big rewards.' },
@@ -104,7 +107,7 @@ export const DroneMissionSystem = {
       let cores = 0;
       let clearedInfestation = false;
       if (active.missionId === 'scrap_run') {
-        scrap = 200 * Math.max(1, saveSystem.get().upgrades.gen);
+        scrap = SCRAP_RUN_BASE * Math.max(1, saveSystem.get().upgrades.gen);
       } else if (active.missionId === 'core_hunt') {
         scrap = 100; cores = 2;
       } else if (active.missionId === 'corruption_scan') {

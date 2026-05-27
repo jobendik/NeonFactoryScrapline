@@ -31,6 +31,7 @@ const QUEST_REWARD_CORES = 1;
 const QUEST_REWARD_SHARDS = 1;
 
 
+/** FNV-1a 32-bit hash — deterministic, fast, good distribution for daily modifier bucketing. */
 function hashString(input: string): number {
   let hash = 2166136261;
   for (let i = 0; i < input.length; i++) {

@@ -3,10 +3,7 @@ import { UIOverlay, el, btn } from './overlay/UIOverlay';
 import { Strings } from '../config/Strings';
 import { saveSystem } from '../platform/SaveSystem';
 import { StreakSystem } from '../systems/StreakSystem';
-
-function todayUtc(): string {
-  return new Date().toISOString().slice(0, 10);
-}
+import { todayUtcDate } from '../config/QuestDefs';
 
 function rewardLabel(day: number): string {
   const reward = StreakSystem.rewardForDay(day);
@@ -29,7 +26,7 @@ export function openDailyLoginPanel(scene: Phaser.Scene, onClosed?: () => void):
 
   const save = saveSystem.get();
   const streakDay = Math.max(0, save.daily.streakDay);
-  const claimedToday = save.daily.lastStreakDate === todayUtc();
+  const claimedToday = save.daily.lastStreakDate === todayUtcDate();
   const currentWeekStart = Math.floor(Math.max(0, streakDay) / 7) * 7 + 1;
   const todayTargetDay = claimedToday ? streakDay : streakDay + 1;
 

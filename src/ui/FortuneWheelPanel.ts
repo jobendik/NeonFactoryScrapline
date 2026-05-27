@@ -4,6 +4,7 @@ import { Strings } from '../config/Strings';
 import { AdManager } from '../platform/AdManager';
 import { saveSystem } from '../platform/SaveSystem';
 import { Economy } from '../systems/EconomySystem';
+import { todayUtcDate } from '../config/QuestDefs';
 
 export type FortuneReward =
   | { kind: 'scrap'; amount: number; label: string; color: string }
@@ -21,10 +22,6 @@ const SEGMENTS: FortuneReward[] = [
   { kind: 'scrap', amount: 500, label: '500 SCRAP', color: '#a76cff' },
 ];
 
-function todayUtc(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
 function grantReward(reward: FortuneReward): void {
   if (reward.kind === 'scrap') Economy.bankLoot(reward.amount, 0);
   else if (reward.kind === 'cores') Economy.bankLoot(0, reward.amount);
@@ -35,7 +32,7 @@ function grantReward(reward: FortuneReward): void {
     save.adState.factoryBoostLastMs = now;
     save.adState.factoryBoostActiveUntilMs = base + reward.minutes * 60 * 1000;
   }
-  saveSystem.get().adState.lastWheelSpin = todayUtc();
+  saveSystem.get().adState.lastWheelSpin = todayUtcDate();
 }
 
 function drawWheel(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, angle: number): void {
@@ -117,7 +114,7 @@ export function openFortuneWheelPanel(scene: Phaser.Scene, onClosed?: () => void
   const ctx = canvas.getContext('2d');
   if (ctx) drawWheel(ctx, canvas, currentAngle);
 
-  const canSpin = saveSystem.get().adState.lastWheelSpin !== todayUtc();
+  const canSpin = saveSystem.get().adState.lastWheelSpin !== todayUtcDate();
   const spinBtn = btn(Strings.fortuneWheelSpin, 'gold', async () => {
     if (spinning || !canSpin) return;
     scene.scene.pause();
