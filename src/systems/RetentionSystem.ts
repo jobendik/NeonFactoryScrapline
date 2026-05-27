@@ -240,4 +240,45 @@ export const RetentionSystem = {
   currentStreakDay(): number {
     return StreakSystem.getDay();
   },
+
+  // Compute a single "next best action" string for the result screen.
+  // Priority order: claimable mission → daily quest → operator unlock → season → generic.
+  computeNextBestAction(): string {
+    try {
+      const save = saveSystem.get();
+      const at = RetentionSystem.almostThere();
+
+      // 1. Claimable contract
+      if (at.missionsReadyToClaim > 0) {
+        return `${at.missionsReadyToClaim} contract${at.missionsReadyToClaim > 1 ? 's' : ''} ready to claim in Factory.`;
+      }
+
+      // 2. Daily quest not yet completed
+      if (at.streakTodayClaimable) {
+        return 'Complete your Daily Quest to fill the Chest.';
+      }
+
+      // 3. Operator within reach (≤150% of current cores)
+      if (at.nextOperator) {
+        const { cost, cores, id } = at.nextOperator;
+        if (cores >= cost) {
+          return `Unlock ${id.charAt(0).toUpperCase() + id.slice(1)} Operator — cores ready.`;
+        }
+        if (cores >= cost * 0.66) {
+          return `${cost - cores} Cores to unlock the next Operator.`;
+        }
+      }
+
+      // 4. Generic loop nudge
+      if (save.stats.extracts === 0) {
+        return 'Try extracting loot to earn a bonus.';
+      }
+      if (save.stats.runs < 5) {
+        return 'Each raid builds your Factory. One more run.';
+      }
+      return 'One more raid.';
+    } catch {
+      return 'One more raid.';
+    }
+  },
 };

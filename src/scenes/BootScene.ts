@@ -11,6 +11,7 @@ import { Analytics } from '../platform/Analytics';
 import { MissionBoard } from '../systems/MissionBoard';
 import { RetentionSystem } from '../systems/RetentionSystem';
 import { FunnelTracker } from '../platform/FunnelTracker';
+import { PlayerXpSystem } from '../systems/PlayerXpSystem';
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -58,6 +59,10 @@ export class BootScene extends Phaser.Scene {
       // POWERUP_COLLECTED / extract-with-cores events to advance contract
       // progress in real time.
       MissionBoard.init();
+      // Retention Phase 1 — PlayerXpSystem subscribes to ENEMY_KILLED and
+      // POWERUP_COLLECTED to accumulate per-session XP. Must run after
+      // saveSystem.load() since it reads accountXp from the save.
+      PlayerXpSystem.init();
       // Retention pass — run the comeback/payday/streak detection here so
       // the banner queue is ready before the first FactoryScene render
       // consumes it. MUST run after MissionBoard.init so almostThere() can

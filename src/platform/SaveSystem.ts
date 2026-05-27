@@ -14,7 +14,7 @@ import {
   type RaidZoneId,
 } from '../config/ScraplineDefs';
 
-export const SAVE_VERSION = 12;
+export const SAVE_VERSION = 13;
 
 export type QualityPreset = 'low' | 'medium' | 'high';
 const SAVE_KEY = 'save';
@@ -154,6 +154,16 @@ export interface SaveData {
     doublePaydayDate: string;
   };
   lastSave: number;
+  // Retention Phase 1 — account-level XP progression (never resets; carries
+  // across all raids). seasonXp resets per season window; tracked separately
+  // so the season system can read it without touching the global level.
+  accountXp: number;
+  seasonXp: number;
+  // Track consecutive losses so the "easier-route nudge" can fire after 3 in
+  // a row, and track the elapsed seconds of the most recent raid for the
+  // "survived longer than last" comeback medal.
+  consecutiveLosses: number;
+  previousRaidElapsedSec: number;
 }
 
 function defaultFtueUnlocks(): FtueUnlocks {
@@ -227,6 +237,10 @@ export function createDefaultSave(): SaveData {
       doublePaydayRaidsLeft: 0,
       doublePaydayDate: '',
     },
+    accountXp: 0,
+    seasonXp: 0,
+    consecutiveLosses: 0,
+    previousRaidElapsedSec: 0,
     lastSave: Date.now(),
   };
 }
@@ -443,6 +457,20 @@ function migrateV11toV12(v11: MigratingSave): MigratingSave {
   };
 }
 
+// v12 → v13: Retention Phase 1 adds account-level XP, season XP, consecutive-
+// loss tracking, and previous-raid elapsed time. All fields default to 0 for
+// existing players so nothing breaks; they simply start the XP curve at 0.
+function migrateV12toV13(v12: MigratingSave): MigratingSave {
+  return {
+    ...v12,
+    version: 13,
+    accountXp: typeof v12.accountXp === 'number' ? (v12.accountXp as number) : 0,
+    seasonXp: typeof v12.seasonXp === 'number' ? (v12.seasonXp as number) : 0,
+    consecutiveLosses: typeof v12.consecutiveLosses === 'number' ? (v12.consecutiveLosses as number) : 0,
+    previousRaidElapsedSec: typeof v12.previousRaidElapsedSec === 'number' ? (v12.previousRaidElapsedSec as number) : 0,
+  };
+}
+
 // Migration path - new versions add their case here. Old saves walk forward step
 // by step. Per the M10 gate: a v0 save (no `version` field, written before
 // versioning existed) is treated as a fresh save - we don't try to merge
@@ -467,6 +495,7 @@ function migrate(raw: unknown): SaveData {
   if (save.version === 9) save = migrateV9toV10(save);
   if (save.version === 10) save = migrateV10toV11(save);
   if (save.version === 11) save = migrateV11toV12(save);
+  if (save.version === 12) save = migrateV12toV13(save);
 
   if (save.version === SAVE_VERSION) {
     return save as unknown as SaveData;

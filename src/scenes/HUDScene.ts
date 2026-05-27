@@ -13,6 +13,7 @@ import { HUDOverlay } from '../ui/overlay/HUDOverlay';
 import { ToastManager } from '../ui/overlay/ToastManager';
 import { AchievementCallout } from '../ui/overlay/AchievementCallout';
 import { UIOverlay as nfrUIOverlay, el as nfrEl } from '../ui/overlay/UIOverlay';
+import { PlayerXpSystem } from '../systems/PlayerXpSystem';
 import type { RaidScene } from './RaidScene';
 import type { FactoryScene } from './FactoryScene';
 
@@ -254,6 +255,10 @@ export class HUDScene extends Phaser.Scene {
     const loot = raid.getRunLoot();
     this.overlay.setScrap(loot.scrap);
     this.overlay.setCores(loot.cores);
+
+    // Retention Phase 1 — live XP bar.
+    const xpProg = PlayerXpSystem.getProgress();
+    this.overlay.updateXp(xpProg.xpIntoCurrentLevel, xpProg.xpForCurrentLevel, xpProg.level);
 
     this.overlay.setTimer(raid.getTimeRemaining());
     this.overlay.setCombo(raid.getCombo());

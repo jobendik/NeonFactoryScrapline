@@ -48,6 +48,7 @@ import {
 } from '../systems/NeonFX';
 import { AchievementSystem } from '../systems/AchievementSystem';
 import { RetentionSystem } from '../systems/RetentionSystem';
+import { PlayerXpSystem } from '../systems/PlayerXpSystem';
 import { RefinerySystem } from '../systems/RefinerySystem';
 import { RaidZoneSystem } from '../systems/RaidZoneSystem';
 import {
@@ -79,6 +80,8 @@ import type {
   RaidEndState,
   RaidEndReason,
   RaidEndPayload,
+  RaidRunStats,
+  ComebackMedal,
   RaidInitData,
   RaidMode,
   WaypointTarget,
@@ -198,6 +201,11 @@ export class RaidScene extends Phaser.Scene {
   // anchor at activation so dropping it as you move feels like placing a
   // sentry rather than a follower.
   private turret: { x: number; y: number; cooldown: number; el: HTMLElement } | null = null;
+  // Retention Phase 1 — per-raid performance stats for the result screen.
+  private runKillCount = 0;
+  private runDamageDealt = 0;
+  private runDamageTaken = 0;
+  private runBestCombo = 1.0;
   private onPlayerDied = (): void => {
     void this.handlePlayerDied();
   };
@@ -251,6 +259,8 @@ export class RaidScene extends Phaser.Scene {
       ? DEFAULT_RAID_ZONE_ID
       : (data?.zoneId ?? RaidZoneSystem.getSelectedZone().id);
     this.zone = getRaidZoneDef(zoneId);
+    // Retention Phase 1 — open XP accumulator for this run.
+    PlayerXpSystem.beginRaid(this.isTutorial);
   }
 
   create(): void {
@@ -376,6 +386,11 @@ export class RaidScene extends Phaser.Scene {
     this.extractTimer = 0;
     this.elapsed = 0;
     this.captionDoneIdx = -1;
+    // Retention Phase 1 — reset per-raid stat trackers.
+    this.runKillCount = 0;
+    this.runDamageDealt = 0;
+    this.runDamageTaken = 0;
+    this.runBestCombo = 1.0;
 
     if (this.isTutorial) {
       this.player.applyHpMult(Balance.tutorial.playerHpMult);
@@ -639,7 +654,8 @@ export class RaidScene extends Phaser.Scene {
         const pdx = this.player.x - ex.x;
         const pdy = this.player.y - ex.y;
         if (pdx * pdx + pdy * pdy <= ex.radius * ex.radius) {
-          this.player.takeDamage(ex.damage);
+          const applied = this.player.takeDamage(ex.damage);
+          if (applied > 0) this.runDamageTaken += applied; // Retention Phase 1
         }
         this.particles.enemyDeath(e.kind, e.x, e.y);
         e.kill();
@@ -1023,6 +1039,7 @@ export class RaidScene extends Phaser.Scene {
     const def = EnemyDefs[e.kind];
     const applied = this.player.takeDamage(def.contactDamage);
     if (applied > 0) {
+      this.runDamageTaken += applied; // Retention Phase 1
       this.showPopup(this.player.x, this.player.y - 22, `-${applied}`, '#ff416b');
     }
   };
@@ -1033,6 +1050,7 @@ export class RaidScene extends Phaser.Scene {
     if (!b.active) return;
     const applied = this.player.takeDamage(b.damage);
     if (applied > 0) {
+      this.runDamageTaken += applied; // Retention Phase 1
       this.showPopup(this.player.x, this.player.y - 22, `-${applied}`, '#ff416b');
     }
     b.kill();
@@ -1043,8 +1061,11 @@ export class RaidScene extends Phaser.Scene {
   private onEnemyKilled(x?: number, y?: number, victim?: Enemy): void {
     this.combo = Math.min(Balance.raid.comboMax, this.combo + Balance.raid.comboPerKill);
     this.comboGrace = Balance.raid.comboGraceSec;
+    // Track best combo for result screen.
+    if (this.combo > this.runBestCombo) this.runBestCombo = this.combo;
     bus.emit(Events.COMBO_CHANGED, this.combo);
     bus.emit(Events.ENEMY_KILLED, { kind: victim?.kind });
+    this.runKillCount += 1;
     // Pyrokinetic card — death emits an AoE pulse damaging nearby enemies.
     // Skip if no position info was supplied (chain-shot callers historically
     // didn't pass it) or if the mod isn't active.
@@ -1550,6 +1571,57 @@ export class RaidScene extends Phaser.Scene {
     // both still fire later; this is the belt-and-suspenders save.
     void saveSystem.persist();
 
+    // Retention Phase 1 — compute XP, run stats, comeback medal, next best action.
+    const levelBefore = PlayerXpSystem.getLevel();
+    const xpResult = PlayerXpSystem.computeRaidXp({
+      elapsedSec: Math.round(this.elapsed),
+      extracted: state === 'extracted',
+      isTutorial: this.isTutorial,
+    });
+    const levelAfter = PlayerXpSystem.getLevel();
+
+    const runStats: RaidRunStats = {
+      elapsedSec: Math.round(this.elapsed),
+      killCount: this.runKillCount,
+      damageDealt: Math.round(this.runDamageDealt),
+      damageTaken: Math.round(this.runDamageTaken),
+      bestCombo: this.runBestCombo,
+      scrapCollectedInRun: this.runLoot.scrap,
+    };
+
+    // Update consecutive-loss counter and previous elapsed for comebacks.
+    const save2 = saveSystem.get();
+    const prevElapsed = save2.previousRaidElapsedSec;
+    if (state === 'extracted') {
+      save2.consecutiveLosses = 0;
+    } else {
+      save2.consecutiveLosses += 1;
+    }
+    save2.previousRaidElapsedSec = runStats.elapsedSec;
+
+    // Determine comeback medal.
+    let comebackMedal: ComebackMedal | undefined;
+    if (state === 'extracted') {
+      const timeLeft = this.timeRemaining;
+      if (save2.stats.extracts === 1) {
+        comebackMedal = 'firstExtract';
+      } else if (timeLeft <= 5) {
+        comebackMedal = 'lastSecond';
+      } else if (greedMult > 1.5) {
+        comebackMedal = 'greedyExtract';
+      } else if (!penaltyApplied) {
+        comebackMedal = 'fullCargo';
+      }
+    } else {
+      if (runStats.elapsedSec > prevElapsed && prevElapsed > 0) {
+        comebackMedal = 'longRun';
+      } else if (runStats.elapsedSec > save2.stats.bestRaid) {
+        comebackMedal = 'personalBest';
+      }
+    }
+
+    const nextBestAction = RetentionSystem.computeNextBestAction();
+
     const payload: RaidEndPayload = {
       endState: state,
       endReason: resolvedReason,
@@ -1565,6 +1637,12 @@ export class RaidScene extends Phaser.Scene {
       zoneId: this.zone.id,
       zoneName: this.zone.name,
       unlockedZones: newlyUnlockedZones.map(z => z.name),
+      runStats,
+      xpEarned: xpResult.total,
+      accountLevelBefore: levelBefore,
+      accountLevelAfter: levelAfter,
+      comebackMedal,
+      nextBestAction,
     };
 
     // Small delay so the moment's tail visuals finish before the summary appears.
@@ -1752,6 +1830,7 @@ export class RaidScene extends Phaser.Scene {
     const ty = target.y;
     target.applyKnockback(sourceX, sourceY);
     const killed = target.hit(damage);
+    this.runDamageDealt += damage; // Retention Phase 1
     this.showDamagePopup(tx, ty - 16, damage, crit ? '#ff416b' : '#ffffff', crit);
     if (killed) {
       this.particles.enemyDeath(target.kind, tx, ty);

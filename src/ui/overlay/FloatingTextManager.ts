@@ -9,7 +9,7 @@
 import type Phaser from 'phaser';
 import { UIOverlay, el } from './UIOverlay';
 
-export type FloatKind = 'dmg' | 'crit' | 'hit' | 'heal' | 'scrap' | 'cores' | 'score' | 'milestone';
+export type FloatKind = 'dmg' | 'crit' | 'hit' | 'heal' | 'scrap' | 'cores' | 'score' | 'milestone' | 'xp';
 
 export interface FloatSpawn {
   text: string;
@@ -30,6 +30,7 @@ const DEFAULT_DURATIONS: Record<FloatKind, number> = {
   cores: 800,
   score: 1000,
   milestone: 1400,
+  xp: 900,
 };
 
 interface Slot {
@@ -49,6 +50,8 @@ export class FloatingTextManager {
   private scrapAccumX = 0;
   private scrapAccumY = 0;
   private scrapAccumTimer: ReturnType<typeof setTimeout> | null = null;
+  // XP popup throttle: show at most one "+N XP" popup per 250ms window.
+  private xpLastShownAt = 0;
 
   constructor(scene: Phaser.Scene) {
     this.layer = el('div', 'nfr-float-layer');
@@ -138,6 +141,20 @@ export class FloatingTextManager {
     return { x: wx - this.camera.scrollX, y: wy - this.camera.scrollY };
   }
 
+  // XP gain popup — throttled to 250ms so rapid kills don't flood the screen.
+  spawnXp(amount: number, worldX: number, worldY: number): void {
+    if (this.destroyed || amount <= 0) return;
+    const now = performance.now();
+    if (now - this.xpLastShownAt < 250) return;
+    this.xpLastShownAt = now;
+    this.spawn({
+      text: `+${amount} XP`,
+      worldX,
+      worldY,
+      kind: 'xp',
+    });
+  }
+
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
@@ -149,6 +166,7 @@ export class FloatingTextManager {
 
 function defaultSize(kind: FloatKind, text: string): number {
   if (kind === 'milestone') return 40;
+  if (kind === 'xp') return 16;
   if (kind === 'crit') {
     const v = parseFloat(text.replace(/[^0-9.]/g, '')) || 0;
     return Math.max(20, Math.min(48, 14 * Math.max(1, Math.log10(v + 1))));
