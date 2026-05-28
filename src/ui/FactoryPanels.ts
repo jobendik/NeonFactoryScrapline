@@ -1,7 +1,7 @@
-// Modal panels invoked from the FactoryScene "machines" row:
-//   - Refinery: spend Cores on permanent multipliers (§10.2)
-//   - Mission Board: 3 daily contracts (§16.6)
-//   - Prestige: System Reboot gate + confirmation (§10.3)
+// Modal panels invoked from the FactoryScene "garden devices" row:
+//   - Moon Altar: spend Star Hearts on permanent blessings (§10.2)
+//   - Wish Board: 3 daily wishes (§16.6)
+//   - New Moon: prestige gate + confirmation (§10.3)
 //
 // M-overhaul: these are now HTML+CSS overlays mounted via UIOverlay. The
 // exported open<X>() signatures are preserved so FactoryScene call sites
@@ -153,7 +153,7 @@ export function openZonePanel(scene: Phaser.Scene, onClosed?: () => void): Teard
 
     const meta = el('div', 'nfr-row__meta');
     const lockText = isUnlocked
-      ? `${Strings.zonePanelYieldPrefix}${zone.materialYieldPer100Scrap} ${material.label}/100 Scrap  |  ${Strings.zonePanelThreatPrefix}${zone.threatMult.toFixed(2)}`
+      ? `${Strings.zonePanelYieldPrefix}${zone.materialYieldPer100Scrap} ${material.label}/100 Stardust  |  ${Strings.zonePanelThreatPrefix}${zone.threatMult.toFixed(2)}`
       : `${Strings.zonePanelLockedPrefix}${zone.unlockExtracts}${Strings.zonePanelLockedSuffix}`;
     meta.textContent = lockText;
     main.appendChild(meta);
@@ -230,7 +230,7 @@ export function openMissionBoard(scene: Phaser.Scene, onClosed?: () => void): Te
       const reward = el('div', 'nfr-row__reward');
       const materialReward = RaidZoneSystem.formatMaterialWallet(def.rewardMaterials ?? {});
       reward.textContent =
-        `Reward: +${def.rewardScrap} Scrap${def.rewardCores ? `, +${def.rewardCores} Core` : ''}` +
+        `Reward: +${def.rewardScrap} Stardust${def.rewardCores ? `, +${def.rewardCores} Star Heart` : ''}` +
         `${materialReward ? `, ${materialReward}` : ''}`;
       main.appendChild(reward);
       row.appendChild(main);
@@ -311,8 +311,9 @@ export function openPrestigePanel(scene: Phaser.Scene, onClosed?: () => void): T
   return dismiss;
 }
 
-// Prestige (§10.3) — wipes Scrap and most upgrades, keeps Refinery, cosmetics,
-// operators, achievements; grants +1 Cyber-Core for a stacking global mult.
+// New Moon / prestige (§10.3) — wipes Stardust and most upgrades, keeps Moon
+// Altar blessings, styles, companions, achievements; grants +1 Eternal Star
+// for a stacking global mult.
 function performPrestige(): void {
   const save = saveSystem.get();
   save.prestige.cyberCores += 1;
@@ -374,7 +375,7 @@ export function openResearchPanel(scene: Phaser.Scene, onClosed?: () => void): T
     const main = el('div', 'nfr-row__main');
     main.appendChild(el('div', 'nfr-row__title', def.name));
     main.appendChild(el('div', 'nfr-row__effect', def.desc));
-    const cost = el('div', 'nfr-row__meta', `${fmtDuration(def.durationMs)} · ${def.costScrap} Scrap${def.costCores > 0 ? ` · ${def.costCores} Cores` : ''}`);
+    const cost = el('div', 'nfr-row__meta', `${fmtDuration(def.durationMs)} · ${def.costScrap} Stardust${def.costCores > 0 ? ` · ${def.costCores} Star Hearts` : ''}`);
     main.appendChild(cost);
     row.appendChild(main);
     if (ResearchSystem.isCompleted(id)) {

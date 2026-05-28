@@ -25,10 +25,9 @@ import { StreakSystem } from '../systems/StreakSystem';
 import { LeaderboardSystem } from '../systems/LeaderboardSystem';
 import { todayUtcDate } from '../config/QuestDefs';
 import { AdManager } from '../platform/AdManager';
-import { CosmeticSystem } from '../systems/CosmeticSystem';
 import { openRefineryPanel, openMissionBoard, openPrestigePanel, openZonePanel, openResearchPanel, openDroneBayPanel } from '../ui/FactoryPanels';
 import { openWeeklyBossPanel } from '../ui/WeeklyBossPanel';
-import { ensureCommonFX, applyGlow, FACTORY_BG_KEY, VIGNETTE_KEY } from '../systems/NeonFX';
+import { ensureCommonFX, FACTORY_BG_KEY, VIGNETTE_KEY } from '../systems/NeonFX';
 import { RetentionSystem } from '../systems/RetentionSystem';
 import { WelcomeBack } from '../ui/WelcomeBack';
 import { UIOverlay as nfrUIOverlay, el as nfrEl, btn } from '../ui/overlay/UIOverlay';
@@ -53,19 +52,19 @@ function nfrActionBtn(label: string, variant: 'cyan' | 'gold' | 'violet' | 'red'
   return b;
 }
 
-// FactoryScene per blueprint §8. The factory is a "living place": the player
-// physically walks around to pick up the scrap dropping out of generators, and
-// stands on a deploy pad to launch a new raid.
+// FactoryScene per blueprint §8. The magical garden is a "living place": the player
+// physically walks around to pick up the stardust dropping out of moonwells, and
+// stands on a deploy pad to launch a new night flight.
 //
 // M8 implements:
-//   - Player + InputSystem (same as raid)
-//   - Generators that pulse and drop scrap on a cadence set by SPM (§8.7)
-//   - Pickup pool + magnet (reused from raid)
-//   - Deploy pad as a physical object - hold for `holdSec` to start a raid
-//   - Walking on collected scrap banks it directly to saveSystem.get().scrap
+//   - Player + InputSystem (same as night flight)
+//   - Moonwells that pulse and drop stardust on a cadence set by SPM (§8.7)
+//   - Pickup pool + magnet (reused from night flight)
+//   - Deploy pad as a physical object - hold for `holdSec` to start a night flight
+//   - Walking on collected stardust banks it directly to saveSystem.get().scrap
 //
-// Future milestones layer on: M9 adds the upgrade panel and additional machine
-// types, M10 adds offline production + persistence.
+// Future milestones layer on: M9 adds the upgrade panel and additional enchanted
+// garden device types, M10 adds offline production + persistence.
 
 type DeployState = 'idle' | 'holding' | 'launching';
 
@@ -74,19 +73,19 @@ export class FactoryScene extends Phaser.Scene {
   private inputSystem!: InputSystem;
   private pickups!: Phaser.GameObjects.Group;
   private generators: Generator[] = [];
-  // Decorative ore veins feeding each generator pair. Visual only — pulse and
+  // Decorative crystal/moonstone veins feeding each moonwell pair. Visual only — pulse and
   // shimmer per frame. Rebuilt when the player upgrades Gen so the active
-  // ore veins match the number of active generators.
+  // crystal veins match the number of active moonwells.
   private oreDeposits: OreDeposit[] = [];
-  // Animated conveyor belts: ore → generator (cosmetic feedstock) and
-  // generator → smelter (visible feedback path when a generator produces).
-  // Indexed by generator slot so we can trigger per-generator cargo bursts
+  // Animated flowing vines: crystal bed → moonwell (cosmetic feedstock) and
+  // moonwell → potion cauldron (visible feedback path when a moonwell produces).
+  // Indexed by moonwell slot so we can trigger per-moonwell cargo bursts
   // from spawnScrapAt().
-  private feedConveyors: Conveyor[] = [];        // ore → generator (parallel to generators[])
-  private outboundConveyors: Conveyor[] = [];    // generator → smelter (parallel to generators[])
-  // Cross-belt running along the right side of the smelter toward the
-  // deploy pad — purely decorative "shipping line" so the deploy pad reads
-  // as the factory's output.
+  private feedConveyors: Conveyor[] = [];        // crystal bed → moonwell (parallel to generators[])
+  private outboundConveyors: Conveyor[] = [];    // moonwell → potion cauldron (parallel to generators[])
+  // Cross-vine running along the right side of the potion cauldron toward the
+  // deploy pad — purely decorative "moongate line" so the deploy pad reads
+  // as the garden's output.
   private shippingConveyor: Conveyor | null = null;
   private smelter: Smelter | null = null;
 
@@ -102,11 +101,11 @@ export class FactoryScene extends Phaser.Scene {
   private milestoneVisuals: Phaser.GameObjects.GameObject[] = [];
   // Ambient decorative props — pipes, wall panels, idle chassis, cable
   // conduits, loading-bay stripes — drawn once on scene create so the
-  // factory reads as a populated workshop even at Gen Lv. 1 (when only
-  // one functional generator spawns). Cleaned up in shutdown().
+  // garden reads as a populated grove even at Gen Lv. 1 (when only
+  // one functional moonwell spawns). Cleaned up in shutdown().
   private ambientDecor: Phaser.GameObjects.GameObject[] = [];
   // Pulsing "DEPLOY" prompt that appears the first time a post-tutorial player
-  // returns to the factory and has bought Gen Lv. 2. Cleared once they walk on
+  // returns to the garden and has bought Gen Lv. 2. Cleared once they walk on
   // the pad or once raidsCompleted advances past 1. HTML element pinned to
   // the pad's world position via the worldPins projection.
   private deployPromptEl: HTMLElement | null = null;
@@ -114,23 +113,23 @@ export class FactoryScene extends Phaser.Scene {
   private padHintEl: HTMLElement | null = null;
   private zoneLabelEl: HTMLElement | null = null;
   // World-pinned HTML overlays: positions updated each frame from the camera
-  // so they look glued to a world coordinate (deploy pad, machine labels).
+  // so they look glued to a world coordinate (deploy pad, garden device labels).
   private worldPins: Array<{ el: HTMLElement; worldX: number; worldY: number }> = [];
   private toastMgr: NfrToastManager | null = null;
   // M16 operator picker — HTML overlay row docked along the bottom of the
   // canvas. Dismiss the previous mount before rebuilding on state change.
   private operatorPanelDismiss: (() => void) | null = null;
-  // M18 — quest panel HTML overlay, rebuilt on claim or raid-return.
+  // M18 — quest panel HTML overlay, rebuilt on claim or night-flight-return.
   private questPanelDismiss: (() => void) | null = null;
   // M19 — daily seed deploy button + leaderboard button + leaderboard modal.
   // dailySeedObjects holds disposable handles ({destroy}) so the existing
   // teardown helper keeps working; HTML overlays push a dismiss adapter.
   private dailySeedObjects: Array<{ destroy: () => void }> = [];
   private leaderboardObjects: Array<{ destroy: () => void }> = [];
-  // M20 — rewarded-ad panel (FACTORY BOOST + CLEAR INFESTATION + DAILY CRATE).
+  // M20 — rewarded-ad panel (GARDEN BOOST + CLEAR INFESTATION + DAILY CRATE).
   // Sits on the left edge below the FPS counter. Refreshed on any state
   // change (boost activated, infestation cleared, daily crate claimed) and
-  // re-ticked each second so the FACTORY BOOST cooldown label updates.
+  // re-ticked each second so the GARDEN BOOST cooldown label updates.
   //
   // M-overhaul: the ad panel is now an HTML overlay column (CSS `.nfr-actioncol`).
   // `adPanelDismiss` tears it down on rebuild / scene shutdown.
@@ -210,7 +209,7 @@ export class FactoryScene extends Phaser.Scene {
   }
 
   // The §5.2 scripted moment: right after the player buys Gen Lv. 2 in their
-  // first post-tutorial factory visit, light up the deploy pad. We key this off
+  // first post-tutorial garden visit, light up the deploy pad. We key this off
   // (tutorialDone, gen>=2, raidsCompleted<=1) so it stops appearing once they're
   // past the FTUE.
   private refreshDeployPrompt(): void {
@@ -269,8 +268,8 @@ export class FactoryScene extends Phaser.Scene {
     const frame = this.inputSystem.getInput();
     this.player.update(dt, frame);
 
-    // Generators tick on the SPM cadence; output divides across active gens so
-    // total factory throughput tracks SPM exactly.
+    // Moonwells tick on the SPM cadence; output divides across active gens so
+    // total garden throughput tracks SPM exactly.
     for (const gen of this.generators) {
       if (gen.tick(dt)) {
         this.spawnScrapAt(gen);
@@ -280,9 +279,9 @@ export class FactoryScene extends Phaser.Scene {
 
     for (const drone of this.drones) drone.update(dt, this.player.x, this.player.y);
 
-    // Ore + conveyor + smelter ticks. Each is visual-only and very cheap
-    // (sin/cos pulse + a handful of sprite positions). Conveyor instances
-    // are deduped because multiple generators may reference the same belt.
+    // Crystal bed + flowing vine + potion cauldron ticks. Each is visual-only and very cheap
+    // (sin/cos pulse + a handful of sprite positions). Flowing vine instances
+    // are deduped because multiple moonwells may reference the same vine.
     for (const ore of this.oreDeposits) ore.update(dt);
     const seenBelts = new Set<Conveyor>();
     for (const belt of this.feedConveyors) {
@@ -298,7 +297,7 @@ export class FactoryScene extends Phaser.Scene {
     if (this.shippingConveyor) {
       this.shippingConveyor.update(dt);
       // Trickle of decorative shipping cargo every ~1.6s while there's any
-      // active generation. Keeps the deploy line visibly moving.
+      // active moonwell output. Keeps the deploy line visibly moving.
       this.shippingCargoTimer -= dt;
       if (this.shippingCargoTimer <= 0 && this.generators.length > 0) {
         this.shippingConveyor.sendCargo(2.2);
@@ -313,8 +312,8 @@ export class FactoryScene extends Phaser.Scene {
     for (const child of this.pickups.getChildren()) {
       const p = child as Pickup;
       if (!p.active) continue;
-      // Drones extend the effective magnet by acting as secondary pull sources.
-      // Whichever of (player, drone) is closest within its radius wins.
+      // Fireflies extend the effective magnet by acting as secondary pull sources.
+      // Whichever of (player, firefly) is closest within its radius wins.
       let pullX = this.player.x;
       let pullY = this.player.y;
       let radius = baseRadius;
@@ -406,14 +405,14 @@ export class FactoryScene extends Phaser.Scene {
   // ---- internals ----
 
   private spawnGenerators(): void {
-    // M8 ships gen_level=1 → one generator visible. Once Gen Lv. 2 unlocks in M9
+    // M8 ships gen_level=1 → one moonwell visible. Once Gen Lv. 2 unlocks in M9
     // the second slot from generatorPositions slides in (per §8.5).
     const genLevel = Math.max(1, saveSystem.get().upgrades.gen);
     const slots = Balance.factory.generatorPositions.slice(0, Math.min(genLevel, Balance.factory.generatorPositions.length));
     // M17 — Economy.computeSpm now reads infestation ratio automatically, so
-    // generatorDropIntervalSec already reflects fewer working machines. We
+    // generatorDropIntervalSec already reflects fewer working garden devices. We
     // multiply by the WORKING count (not slots.length) so each healthy
-    // generator drops at the right cadence to land at the post-infestation
+    // moonwell drops at the right cadence to land at the post-infestation
     // SPM. With 1 of 2 infested: working=1, perGenInterval = baseInterval.
     const infested = new Set(InfestationSystem.getInfestedIndices());
     const workingCount = Math.max(1, slots.length - infested.size);
@@ -433,30 +432,30 @@ export class FactoryScene extends Phaser.Scene {
   }
 
   // Pin a few decorative labels along the floor so the spatial story reads
-  // at a glance: ore enters from the west, refines at the centre, ships
-  // from the deploy pad on the east. World-pinned HTML so they share the
+  // at a glance: moonstone enters from the west, brews at the centre, flies home
+  // through the moongate on the east. World-pinned HTML so they share the
   // glow palette of every other label in the game.
   private spawnFactoryLabels(): void {
     const wb = Balance.player.worldBounds;
     const sm = Balance.factory.smelter;
 
     const oreLabel = nfrEl('div', 'nfr-machine-label gold');
-    oreLabel.textContent = '◆ RAW ORE ◆';
+    oreLabel.textContent = '✦ CRYSTAL BEDS ✦';
     this.pinHtmlToWorld(oreLabel, wb.minX + 170, wb.minY + 60);
 
     const smelterLabel = nfrEl('div', 'nfr-machine-label cyan');
-    smelterLabel.textContent = '◆ SMELTER ◆';
+    smelterLabel.textContent = '✦ CAULDRON ✦';
     this.pinHtmlToWorld(smelterLabel, sm.x, sm.y - 90);
 
     const shipLabel = nfrEl('div', 'nfr-machine-label cyan');
     shipLabel.style.color = 'var(--nfr-green, #72ff9f)';
     shipLabel.style.textShadow = '0 0 8px rgba(114, 255, 159, 0.55), 0 1px 3px rgba(0, 0, 0, 0.95)';
-    shipLabel.textContent = '◆ SHIPPING ◆';
+    shipLabel.textContent = '✦ MOONGATE ✦';
     this.pinHtmlToWorld(shipLabel, this.padX, wb.minY + 60);
   }
 
   // Persistent ambient particles around the deploy pad so it reads as a
-  // live launch portal rather than a static circle on the floor. Two
+  // live moongate portal rather than a static circle on the floor. Two
   // emitters: rising motes inside the ring and an outer halo that breathes.
   private spawnDeployPadFX(): void {
     // Rising motes inside the pad — sourced from a ring just inside the
@@ -497,13 +496,13 @@ export class FactoryScene extends Phaser.Scene {
     this.ambientDecor.push(ring);
   }
 
-  // Spawn one ore deposit per active generator row, plus a single feed belt
-  // and outbound belt running through ALL generators sharing that row.
-  // Generators visually "sit on" the belt so the chain reads as continuous
-  // ore-in / scrap-out flow even when both columns are active.
+  // Spawn one moonstone bed per active moonwell row, plus a single feed vine
+  // and outbound vine running through ALL moonwells sharing that row.
+  // Moonwells visually "sit on" the vine so the chain reads as continuous
+  // moonstone-in / stardust-out flow even when both columns are active.
   //
   // feedConveyors[i] / outboundConveyors[i] are parallel to generators[i] —
-  // multiple generators in the same row reference the same Conveyor instance.
+  // multiple moonwells in the same row reference the same Conveyor instance.
   // Destruction dedupes via a Set so we never double-free.
   private spawnOreAndConveyors(): void {
     if (!this.smelter) return;
@@ -511,18 +510,18 @@ export class FactoryScene extends Phaser.Scene {
     const activeYs = new Set<number>(this.generators.map(g => g.y));
     const sm = this.smelter;
 
-    // Per-row conveyor cache so generators in the same y-band share belts.
+    // Per-row flowing-vine cache so moonwells in the same y-band share vines.
     const feedByRow = new Map<number, Conveyor>();
     const outboundByRow = new Map<number, Conveyor>();
-    // Track distinct belt instances for the chain links so destroy() knows
+    // Track distinct vine instances for the chain links so destroy() knows
     // about them too.
     const linkBelts: Conveyor[] = [];
 
     for (let i = 0; i < oreSlots.length; i++) {
       const ore = oreSlots[i];
-      // Always render the ore deposit — gives the factory presence at low
-      // gen levels. Conveyors and chains only attach to rows that have an
-      // active generator.
+      // Always render the moonstone bed — gives the garden presence at low
+      // gen levels. Flowing vines and chains only attach to rows that have an
+      // active moonwell.
       this.oreDeposits.push(new OreDeposit(this, ore.x, ore.y, ore.tint));
       if (!activeYs.has(ore.y)) continue;
 
@@ -531,7 +530,7 @@ export class FactoryScene extends Phaser.Scene {
       const eastmost = rowGens.reduce((a, b) => (a.x > b.x ? a : b));
       const westmost = rowGens.reduce((a, b) => (a.x < b.x ? a : b));
 
-      // Feed belt: ore east-edge → eastmost generator's west-edge.
+      // Feed vine: moonstone east-edge → eastmost moonwell's west-edge.
       const tint: ConveyorTint =
         ore.tint === 'gold' ? 'gold' :
         ore.tint === 'violet' ? 'violet' :
@@ -546,13 +545,13 @@ export class FactoryScene extends Phaser.Scene {
       );
       feedByRow.set(ore.y, feed);
 
-      // Outbound belt: eastmost generator's east-edge → smelter intake.
+      // Outbound vine: eastmost moonwell's east-edge → potion cauldron intake.
       const beltStartX = eastmost.x + Balance.factory.generatorSize / 2 + 4;
       const outbound = new Conveyor(this, beltStartX, ore.y, sm.x - 100, sm.y + 8, 'cyan');
       outboundByRow.set(ore.y, outbound);
 
-      // Inter-generator chain belt (only when both columns active in this
-      // row). Short cyan belt linking westmost → eastmost.
+      // Inter-moonwell chain vine (only when both columns active in this
+      // row). Short cyan vine linking westmost → eastmost.
       if (rowGens.length > 1) {
         const link = new Conveyor(
           this,
@@ -567,7 +566,7 @@ export class FactoryScene extends Phaser.Scene {
     }
 
     // Build parallel arrays aligned with this.generators. Multiple entries
-    // may reference the same Conveyor; that's fine — sendCargo() runs an
+    // may reference the same flowing vine; that's fine — sendCargo() runs an
     // independent cargo per call.
     for (const gen of this.generators) {
       const feed = feedByRow.get(gen.y);
@@ -575,14 +574,14 @@ export class FactoryScene extends Phaser.Scene {
       if (feed) this.feedConveyors.push(feed);
       if (outbound) this.outboundConveyors.push(outbound);
     }
-    // Stash link belts in feedConveyors too so they get tick()'d each frame
+    // Stash link vines in feedConveyors too so they get tick()'d each frame
     // and destroyed via the dedup-aware shutdown path.
     for (const link of linkBelts) this.feedConveyors.push(link);
   }
 
-  // Single "shipping" conveyor running from the smelter east toward the
-  // deploy pad. Continuous decorative cargo gives the factory a sense of
-  // material moving out for the next raid.
+  // Single "shipping" flowing vine running from the potion cauldron east toward the
+  // deploy pad. Continuous decorative cargo gives the garden a sense of
+  // material moving out for the next night flight.
   private spawnShippingConveyor(): void {
     if (!this.smelter) return;
     const startX = this.smelter.x + 110;
@@ -596,7 +595,7 @@ export class FactoryScene extends Phaser.Scene {
 
   private shippingCargoTimer = 0;
 
-  // Tear down all feed + outbound conveyors. Multiple generators in the same
+  // Tear down all feed + outbound flowing vines. Multiple moonwells in the same
   // row reference the same Conveyor, so we dedupe before destroying.
   private destroyConveyors(): void {
     const seen = new Set<Conveyor>();
@@ -615,23 +614,23 @@ export class FactoryScene extends Phaser.Scene {
   }
 
   private spawnScrapAt(gen: Generator): void {
-    // Generator visual reaction: brightness flash + spark burst + gear kick.
+    // Moonwell visual reaction: brightness flash + spark burst + gear kick.
     gen.triggerProductionBurst();
     const pos = gen.randomDropPosition();
     const p = this.pickups.get(pos.x, pos.y) as Pickup | null;
     if (!p) return;
     p.spawn(pos.x, pos.y, 'scrap', 1);
 
-    // Send a decorative chunk along the outbound conveyor for this generator
-    // so the player sees the scrap "shipping" toward the smelter. Pure visual
-    // — the actual scrap pickup is what gets banked by the worker / player.
+    // Send a decorative chunk along the outbound flowing vine for this moonwell
+    // so the player sees the stardust "shipping" toward the potion cauldron. Pure visual
+    // — the actual stardust pickup is what gets banked by the pixie / player.
     const idx = this.generators.indexOf(gen);
     if (idx >= 0 && idx < this.outboundConveyors.length) {
       const belt = this.outboundConveyors[idx];
       belt.sendCargo(2.4);
     }
-    // Also send an inbound "ore" chunk on the feed conveyor — the visual
-    // implication is the generator just ate a chunk of ore to produce.
+    // Also send an inbound "moonstone" chunk on the feed vine — the visual
+    // implication is the moonwell just ate a chunk of moonstone to produce.
     if (idx >= 0 && idx < this.feedConveyors.length) {
       const feed = this.feedConveyors[idx];
       feed.sendCargo(1.4);
@@ -643,7 +642,7 @@ export class FactoryScene extends Phaser.Scene {
   }
 
   private onWorkerDelivered(value: number, wx: number, _wy: number): void {
-    // Smelter visibly reacts to each delivery — funnel pulse + ember burst.
+    // Potion cauldron visibly reacts to each delivery — funnel pulse + ember burst.
     this.smelter?.pulseDeposit();
     // Show a brief world-pinned "+N" popup near the deposit point.
     // Slight lateral offset so simultaneous deliveries from each side stay readable.
@@ -658,7 +657,7 @@ export class FactoryScene extends Phaser.Scene {
     setTimeout(() => {
       this.unpinHtmlFromWorld(el);
     }, 1200);
-    // Also fire FTUE toast the very first time a worker delivers.
+    // Also fire FTUE toast the very first time a pixie delivers.
     if (!this.workerFirstDeliveryToastShown) {
       this.workerFirstDeliveryToastShown = true;
       this.showHtmlToast('🤖 Hauler delivered scrap — automation is live!', 'cyan', 3500);
@@ -669,7 +668,7 @@ export class FactoryScene extends Phaser.Scene {
 
   private spawnDrones(): void {
     const count = UpgradeEffects.droneCount();
-    const withTrail = count >= 3; // §8.5 "Drone Lv. 3: drones gain trails"
+    const withTrail = count >= 3; // §8.5 "Firefly Lv. 3: fireflies gain trails"
     const orbitRadius = 56;
     const orbitSpeed = 2.4;
     for (let i = 0; i < count; i++) {
@@ -699,10 +698,10 @@ export class FactoryScene extends Phaser.Scene {
     }
   }
 
-  // §5.3 reveal rules. Gen is always visible (first factory view shows only
-  // GENERATOR per the M11 spec). The rest gate on the ftueUnlocks flags set
+  // §5.3 reveal rules. Gen is always visible (first garden view shows only
+  // MOONWELL per the M11 spec). The rest gate on the ftueUnlocks flags set
   // by RaidScene.finishRaid. Speed isn't called out in §5.3 - we piggyback
-  // it on the first-real-raid magnet reveal so the first factory visit is
+  // it on the first-real-night-flight magnet reveal so the first garden visit is
   // a single highlighted row, matching the tutorial brief.
   private isUpgradeUnlocked(key: UpgradeKey): boolean {
     const u = saveSystem.get().ftueUnlocks;
@@ -727,10 +726,10 @@ export class FactoryScene extends Phaser.Scene {
   private handleUpgradePurchased(): void {
     // Refresh affordability + level text on every card after any purchase.
     for (const card of this.upgradeCards) card.refresh();
-    // Player numeric stats (HP, speed) refresh immediately for the in-factory feel.
+    // Player numeric stats (HP, speed) refresh immediately for the in-garden feel.
     this.player.refreshFromUpgrades();
-    // Some upgrades require live changes to the factory floor (more generators,
-    // a new drone, new placeholder visuals).
+    // Some upgrades require live changes to the garden floor (more moonwells,
+    // a new firefly, new placeholder visuals).
     this.rebuildFactoryFloor();
     // After Gen Lv. 2 - the scripted §5.2 first-purchase - light up the deploy
     // pad so the player understands what to do next.
@@ -852,22 +851,22 @@ export class FactoryScene extends Phaser.Scene {
       return rt;
     };
 
-    // Gen Lv. 3: conveyor belts connect generators (placeholder line strip).
+    // Gen Lv. 3: flowing vines connect moonwells (placeholder line strip).
     if (gen >= 3 && this.generators.length >= 2) {
       const a = this.generators[0];
       const b = this.generators[1];
       this.milestoneVisuals.push(bakeMilestone(1, g => {
         g.lineStyle(8, 0x202a3a, 1);
         g.lineBetween(a.x, a.y, b.x, b.y);
-        g.lineStyle(2, 0x22f6ff, 0.5);
+        g.lineStyle(2, 0x7cc9ff, 0.5);
         g.lineBetween(a.x, a.y, b.x, b.y);
       }));
     }
 
-    // Gen Lv. 5: factory expands - zoom camera out slightly.
+    // Gen Lv. 5: garden expands - zoom camera out slightly.
     this.cameras.main.setZoom(gen >= 5 ? 0.88 : 1);
 
-    // Gen Lv. 10: reactor core in center (labeled placeholder).
+    // Gen Lv. 10: moon core in center (labeled placeholder).
     if (gen >= 10) {
       this.milestoneVisuals.push(bakeMilestone(1, g => {
         g.fillStyle(0xffd75a, 0.35);
@@ -876,20 +875,20 @@ export class FactoryScene extends Phaser.Scene {
         g.strokeRect(-40, -40, 80, 80);
       }));
       const reactorLabel = nfrEl('div', 'nfr-machine-label gold');
-      reactorLabel.textContent = 'REACTOR';
+      reactorLabel.textContent = 'MOON CORE';
       this.pinHtmlToWorld(reactorLabel, 0, 0);
     }
 
-    // Magnet Lv. 3+: visible coil pillar (placeholder).
+    // Magnet Lv. 3+: visible prism pillar (placeholder).
     if (magnet >= 3) {
       this.milestoneVisuals.push(bakeMilestone(1, g => {
-        g.fillStyle(0x22f6ff, 0.55);
+        g.fillStyle(0x7cc9ff, 0.55);
         g.fillRect(-220, 190, 40, 60);
-        g.lineStyle(2, 0x22f6ff, 0.9);
+        g.lineStyle(2, 0x7cc9ff, 0.9);
         g.strokeRect(-220, 190, 40, 60);
       }));
       const coilLabel = nfrEl('div', 'nfr-machine-label cyan');
-      coilLabel.textContent = 'COIL';
+      coilLabel.textContent = 'PRISM';
       this.pinHtmlToWorld(coilLabel, -200, 260);
     }
   }
@@ -935,7 +934,7 @@ export class FactoryScene extends Phaser.Scene {
     const worldW = wb.maxX - wb.minX;
     const worldH = wb.maxY - wb.minY;
 
-    // Camera-fixed factory floor tile — industrial hazard stripes + rivets.
+    // Camera-fixed night-garden floor tile — soft midnight meadow + stardust.
     const floor = this.add
       .tileSprite(0, 0, camW + 32, camH + 32, FACTORY_BG_KEY)
       .setOrigin(0, 0)
@@ -943,7 +942,7 @@ export class FactoryScene extends Phaser.Scene {
       .setDepth(-100);
     void floor;
 
-    // World-tiled factory floor (large) so the player sees the same surface
+    // World-tiled garden floor (large) so the player sees the same surface
     // wherever they walk. Lower alpha than the camera-fixed layer so the
     // bloom shows through.
     const worldFloor = this.add
@@ -953,215 +952,257 @@ export class FactoryScene extends Phaser.Scene {
       .setDepth(-90);
     void worldFloor;
 
-    const themeColor = CosmeticSystem.getEquippedThemeColor() || Balance.colors.background;
-    // Bake grid + bounds into RenderTextures — no persistent Graphics objects.
-    const step = Balance.ui.gridStep;
-    const rtGrid = this.add.renderTexture(0, 0, worldW, worldH).setOrigin(0, 0).setDepth(-10);
-    const gGrid = this.add.graphics();
-    gGrid.lineStyle(1, themeColor, 0.22);
-    for (let x = wb.minX; x <= wb.maxX; x += step) {
-      gGrid.moveTo(x, wb.minY);
-      gGrid.lineTo(x, wb.maxY);
-    }
-    for (let y = wb.minY; y <= wb.maxY; y += step) {
-      gGrid.moveTo(wb.minX, y);
-      gGrid.lineTo(wb.maxX, y);
-    }
-    gGrid.strokePath();
-    rtGrid.draw(gGrid, -wb.minX, -wb.minY);
-    gGrid.destroy();
-    rtGrid.setPosition(wb.minX, wb.minY);
-
-    // Glowing arena frame — baked into RT so applyGlow works on the sprite.
+    // Soft garden border — a gentle rounded hedge-line, not a tech frame.
     const rtBounds = this.add.renderTexture(0, 0, worldW, worldH).setOrigin(0, 0).setDepth(-8);
     const gBounds = this.add.graphics();
-    gBounds.lineStyle(3, themeColor, 0.85);
-    gBounds.strokeRect(wb.minX, wb.minY, worldW, worldH);
+    gBounds.lineStyle(6, 0x2f8f63, 0.55);
+    gBounds.strokeRoundedRect(wb.minX + 4, wb.minY + 4, worldW - 8, worldH - 8, 40);
     rtBounds.draw(gBounds, -wb.minX, -wb.minY);
     gBounds.destroy();
     rtBounds.setPosition(wb.minX, wb.minY);
-    applyGlow(rtBounds, themeColor, 5, 0);
 
-    // Vignette overlay focuses attention on the player.
+    // Very soft warm vignette — just a whisper so the bright lawn stays bright.
     const vignette = this.add
       .image(camW / 2, camH / 2, VIGNETTE_KEY)
       .setScrollFactor(0)
       .setDepth(1100)
-      .setAlpha(0.45);
+      .setAlpha(0.12);
     void vignette;
   }
 
-  // Ambient props that exist regardless of upgrade level so a Gen Lv. 1
-  // factory still reads as a populated workshop. Depth budget:
-  //   -7 → wall panels (sit on the bounds frame)
-  //   -6 → cable conduits running into the deploy pad
-  //   -5 → loading-bay hazard stripes (floor decals above grid)
-  //    0 → upright props (pipes, idle chassis) — below generators (2)
-  //
-  // Each layer is baked into a RenderTexture (draw once, render as sprite)
-  // so there are no persistent Graphics objects on the display list.
+  // Cozy garden decor that exists regardless of upgrade level so the garden
+  // always reads as a lush, lived-in grove: trees, bushes, flower clumps, a
+  // pond, mushrooms and lanterns — hand-placed in the open margins as sprites
+  // (depth -8 pond / -5 props) so they sit below the moonwells (2) and player.
   private drawAmbientDecor(): void {
-    const wb = Balance.player.worldBounds;
-    const worldW = wb.maxX - wb.minX;
-    const worldH = wb.maxY - wb.minY;
-    const themeColor = Balance.colors.background; // cyan accent
-    const slate = 0x101820;
-    const dim = 0x182838;
+    FactoryScene.ensureDecorTextures(this);
 
-    // Helper: bake a Graphics into a fixed-size RT covering world bounds.
-    const bake = (depth: number, draw: (g: Phaser.GameObjects.Graphics) => void): Phaser.GameObjects.RenderTexture => {
-      const rt = this.add.renderTexture(0, 0, worldW, worldH).setOrigin(0, 0).setDepth(depth);
-      const g = this.add.graphics();
-      draw(g);
-      rt.draw(g, -wb.minX, -wb.minY);
-      g.destroy();
-      rt.setPosition(wb.minX, wb.minY);
-      return rt;
+    // Hand-placed cozy garden decor as real sprites (renders everywhere,
+    // including headless). Positions sit in the open margins so they never
+    // cover the moonwells (x ≈ -540..-380), the cauldron (-100,10), the
+    // moongate (540,0), or the ore veins (x -710).
+    const place = (key: string, x: number, y: number, depth: number, scale = 1): void => {
+      const img = this.add.image(x, y, key).setDepth(depth).setScale(scale);
+      img.setOrigin(0.5, key === 'decor-pond' ? 0.5 : 1);
+      this.ambientDecor.push(img);
     };
 
-    // --- Wall panels along the far left/right edges. Periodic rectangles
-    //     with a cyan accent stripe at the bottom so they read as
-    //     industrial cabinets rather than solid walls. ---
-    const wallHeight = 110;
-    const wallWidth = 24;
-    const wallStep = 180;
-    const wallStartY = wb.minY + 70;
-    this.ambientDecor.push(bake(-7, g => {
-      g.fillStyle(dim, 0.9);
-      for (let y = wallStartY; y < wb.maxY - 80; y += wallStep) {
-        g.fillRect(wb.minX + 12, y, wallWidth, wallHeight);
-        g.fillRect(wb.maxX - 12 - wallWidth, y, wallWidth, wallHeight);
-      }
-      g.fillStyle(themeColor, 0.45);
-      for (let y = wallStartY; y < wb.maxY - 80; y += wallStep) {
-        g.fillRect(wb.minX + 12, y + wallHeight - 4, wallWidth, 3);
-        g.fillRect(wb.maxX - 12 - wallWidth, y + wallHeight - 4, wallWidth, 3);
-      }
-    }));
+    // Pond — flat on the ground, lowest decor layer (kept in open right-centre).
+    place('decor-pond', 400, 250, -8);
 
-    // --- Cable conduits: dim trunks routed from each generator slot down
-    //     to the smelter's east side (where the shipping conveyor exits)
-    //     then east to the deploy pad. A thinner cyan trace on top so
-    //     power feels "live". ---
-    const smelterEastX = Balance.factory.smelter.x + 110;
-    const drawCableRun = (g: Phaser.GameObjects.Graphics, lineColor: number, lineAlpha: number, width: number): void => {
-      g.lineStyle(width, lineColor, lineAlpha);
-      // Trunk along the top + bottom edges connecting all generators back
-      // toward the smelter rather than running through the play area.
-      for (const gpos of Balance.factory.generatorPositions) {
-        const trunkY = gpos.y > 0 ? wb.maxY - 80 : wb.minY + 80;
-        g.beginPath();
-        g.moveTo(gpos.x, gpos.y + (gpos.y > 0 ? 28 : -28));
-        g.lineTo(gpos.x, trunkY);
-        g.lineTo(smelterEastX, trunkY);
-        g.lineTo(smelterEastX, 0);
-        g.strokePath();
-      }
-      // East-bound trunk to the pad.
-      g.beginPath();
-      g.moveTo(smelterEastX, 0);
-      g.lineTo(this.padX - this.padRadius - 6, 0);
-      g.strokePath();
-    };
-    this.ambientDecor.push(bake(-6, g => {
-      drawCableRun(g, slate, 1, 5);
-      drawCableRun(g, themeColor, 0.55, 2);
-      // Junction nodes at the smelter junction and pad.
-      g.fillStyle(themeColor, 0.75);
-      g.fillCircle(smelterEastX, 0, 5);
-      g.fillCircle(this.padX - this.padRadius - 6, 0, 5);
-    }));
-
-    // --- Loading-bay hazard stripes around the deploy pad. A box of
-    //     diagonal yellow trapezoids cropped to leave the pad circle
-    //     unobstructed so the player's eye still locks onto the pad. ---
-    const bayHalf = 150;
-    const stripeW = 18;
-    const stripeGap = 16;
-    const bayLeft = this.padX - bayHalf;
-    const bayTop = this.padY - bayHalf;
-    const bayBottom = this.padY + bayHalf;
-    this.ambientDecor.push(bake(-5, g => {
-      g.fillStyle(0xffd75a, 0.10);
-      for (let i = -6; i < 18; i++) {
-        const x0 = bayLeft + i * (stripeW + stripeGap);
-        g.beginPath();
-        g.moveTo(x0, bayTop);
-        g.lineTo(x0 + stripeW, bayTop);
-        g.lineTo(x0 + stripeW + (bayBottom - bayTop), bayBottom);
-        g.lineTo(x0 + (bayBottom - bayTop), bayBottom);
-        g.closePath();
-        g.fillPath();
-      }
-    }));
-
-    // --- Top + bottom pipe runs spanning the full world width. Slate
-    //     trunk with a cyan inner trace and periodic bracket dots so the
-    //     pipe reads as fastened to the wall. ---
-    const pipeTopY = wb.minY + 34;
-    const pipeBotY = wb.maxY - 34;
-    this.ambientDecor.push(bake(0, g => {
-      g.lineStyle(10, slate, 1);
-      g.lineBetween(wb.minX + 50, pipeTopY, wb.maxX - 50, pipeTopY);
-      g.lineBetween(wb.minX + 50, pipeBotY, wb.maxX - 50, pipeBotY);
-      g.lineStyle(2.5, themeColor, 0.55);
-      g.lineBetween(wb.minX + 50, pipeTopY, wb.maxX - 50, pipeTopY);
-      g.lineBetween(wb.minX + 50, pipeBotY, wb.maxX - 50, pipeBotY);
-      g.fillStyle(themeColor, 0.7);
-      for (let x = wb.minX + 90; x < wb.maxX - 70; x += 130) {
-        g.fillCircle(x, pipeTopY, 4);
-        g.fillCircle(x, pipeBotY, 4);
-      }
-    }));
-
-    // --- Idle chassis: 6 non-functional placeholder machine boxes in the
-    //     dead zones around the deploy pad so the east side of the workshop
-    //     reads as a populated shipping area. Distinct from the real
-    //     Generator entity (different color + size) so the player doesn't
-    //     mistake them for upgradeable hardware. ---
-    const chassisSpots: Array<{ x: number; y: number; w: number; h: number }> = [
-      { x: 220, y: -400, w: 100, h: 50 },
-      { x: 220, y:  400, w: 100, h: 50 },
-      { x: 360, y: -440, w: 70, h: 44 },
-      { x: 360, y:  440, w: 70, h: 44 },
-      { x: 680, y: -420, w: 80, h: 56 },
-      { x: 680, y:  420, w: 80, h: 56 },
-      // Two crates flanking the smelter for variety.
-      { x:  60, y: -90, w: 50, h: 38 },
-      { x:  60, y:  110, w: 50, h: 38 },
+    // Trees — frame the visible upper band + far corners (avoid moonwell column
+    // x -360..-560, the cauldron x -210..40, and the moongate x 470..610).
+    const trees: Array<[number, number, number]> = [
+      [-280, -300, 0.85], [70, -320, 0.95], [360, -300, 0.85], [640, -288, 0.8],
+      [-700, -470, 1.0], [700, -452, 1.0], [705, 505, 1.0], [-705, 515, 1.0],
     ];
-    this.ambientDecor.push(bake(0, g => {
-      for (const s of chassisSpots) {
-        const hx = s.x - s.w / 2;
-        const hy = s.y - s.h / 2;
-        g.fillStyle(slate, 0.9);
-        g.fillRoundedRect(hx, hy, s.w, s.h, 6);
-        g.lineStyle(1.5, themeColor, 0.5);
-        g.strokeRoundedRect(hx, hy, s.w, s.h, 6);
-        // Status LED — desaturated so it reads as "standby" rather than active.
-        g.fillStyle(themeColor, 0.4);
-        g.fillCircle(s.x, s.y - s.h / 2 + 6, 2);
-        // Inner panel inset for a bit of texture.
-        g.lineStyle(1, themeColor, 0.22);
-        g.strokeRect(hx + 6, hy + 12, s.w - 12, s.h - 18);
-      }
-    }));
+    for (const [x, y, s] of trees) place('decor-tree', x, y, -5, s);
 
-    // --- Floor decals: "RAW ORE" label on the west side and "SHIPPING" on the
-    //     east side, baked as faint floor markings so the player gets the
-    //     spatial story (ore enters west, deploys east). ---
-    this.ambientDecor.push(bake(-4, g => {
-      // West-side "MINING" zone outline.
-      g.lineStyle(2, 0xffd75a, 0.18);
-      g.strokeRect(wb.minX + 30, wb.minY + 80, 280, wb.maxY - wb.minY - 160);
-      // East-side "SHIPPING" zone outline.
-      g.lineStyle(2, 0x72ff9f, 0.18);
-      g.strokeRect(this.padX - 200, wb.minY + 80, 400, wb.maxY - wb.minY - 160);
-      // Central refinery zone.
-      const sm = Balance.factory.smelter;
-      g.lineStyle(2, themeColor, 0.22);
-      g.strokeRect(sm.x - 130, sm.y - 110, 260, 220);
-    }));
+    // Bushes — dot the open meadow + line the bottom edge.
+    const bushes: Array<[number, number, number]> = [
+      [130, -240, 0.9], [-230, 300, 0.9], [470, 220, 0.85], [40, 320, 0.85], [560, -180, 0.85],
+      [-150, 548, 0.9], [180, 540, 1.0], [380, 548, 0.9], [610, 536, 1],
+    ];
+    for (const [x, y, s] of bushes) place('decor-bush', x, y, -5, s);
+
+    // Flower clumps — sprinkled through the open centre/right meadow.
+    const flowers: Array<[number, number, number]> = [
+      [250, -130, 1], [120, 120, 0.9], [380, 80, 0.9], [-250, -150, 0.9],
+      [450, -150, 0.95], [210, 300, 0.9], [520, 170, 0.9], [-180, 200, 0.85], [330, -210, 0.9],
+    ];
+    for (const [x, y, s] of flowers) place('decor-flowers', x, y, -5, s);
+
+    // Mushrooms — little accents tucked beside trees + bushes.
+    const shrooms: Array<[number, number, number]> = [
+      [-180, -270, 0.85], [300, -345, 0.8], [175, 250, 0.85], [490, 300, 0.85],
+    ];
+    for (const [x, y, s] of shrooms) place('decor-mushroom', x, y, -5, s);
+
+    // Lanterns — flank the moongate so it feels like a welcoming gate.
+    place('decor-lantern', this.padX - 120, this.padY - 6, -5, 1);
+    place('decor-lantern', this.padX + 120, this.padY - 6, -5, 1);
+
+    // Gentle drifting fireflies wandering the whole garden for cozy life.
+    const wb = Balance.player.worldBounds;
+    const fireflies = this.add.particles(0, 0, 'fx-spark', {
+      x: { min: wb.minX, max: wb.maxX },
+      y: { min: wb.minY, max: wb.maxY },
+      lifespan: 4200,
+      frequency: 200,
+      quantity: 1,
+      scale: { start: 0.7, end: 0.1 },
+      alpha: { start: 0, end: 0.9, ease: 'Sine.easeInOut' },
+      tint: [0xfff0b0, 0xffe066, 0xbff0d0, 0xfff6c2],
+      speed: { min: 6, max: 24 },
+      angle: { min: 0, max: 360 },
+      rotate: { min: 0, max: 360 },
+    });
+    fireflies.setDepth(-2);
+    this.ambientDecor.push(fireflies);
+  }
+
+  // Builds the cozy garden decor textures once (cute flat-cartoon: bold fills,
+  // soft shadows, cheerful highlights). Cached on the TextureManager.
+  private static ensureDecorTextures(scene: Phaser.Scene): void {
+    const mk = (key: string, w: number, h: number, draw: (c: CanvasRenderingContext2D) => void): void => {
+      if (scene.textures.exists(key)) return;
+      const t = scene.textures.createCanvas(key, w, h);
+      if (!t) return;
+      draw(t.context);
+      t.refresh();
+    };
+    const shadow = (ctx: CanvasRenderingContext2D, x: number, y: number, rx: number, ry: number): void => {
+      ctx.fillStyle = 'rgba(20, 60, 45, 0.20)';
+      ctx.beginPath();
+      ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
+      ctx.fill();
+    };
+    const petalFlower = (ctx: CanvasRenderingContext2D, x: number, y: number, r: number, col: string): void => {
+      ctx.fillStyle = col;
+      for (let p = 0; p < 5; p++) {
+        const a = (p / 5) * Math.PI * 2;
+        ctx.beginPath();
+        ctx.arc(x + Math.cos(a) * r, y + Math.sin(a) * r, r * 0.72, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.fillStyle = '#fff3b0';
+      ctx.beginPath();
+      ctx.arc(x, y, r * 0.62, 0, Math.PI * 2);
+      ctx.fill();
+    };
+
+    // ---- Tree: chunky trunk + fluffy 3-lobe canopy + blossoms ----
+    mk('decor-tree', 200, 240, ctx => {
+      shadow(ctx, 100, 232, 58, 13);
+      // trunk
+      ctx.fillStyle = '#8a5a3c';
+      ctx.beginPath();
+      ctx.moveTo(86, 232); ctx.lineTo(82, 150); ctx.lineTo(118, 150); ctx.lineTo(114, 232);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.18)';
+      ctx.fillRect(88, 150, 8, 82);
+      // canopy base shade
+      ctx.fillStyle = '#3f9e6e';
+      ctx.beginPath(); ctx.arc(100, 150, 70, 0, Math.PI * 2); ctx.fill();
+      // canopy lobes
+      ctx.fillStyle = '#54c389';
+      for (const [cx, cy, r] of [[58, 120, 50], [142, 120, 50], [100, 92, 60]] as const) {
+        ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+      }
+      // top highlight
+      ctx.fillStyle = 'rgba(160, 240, 190, 0.55)';
+      ctx.beginPath(); ctx.arc(84, 74, 30, 0, Math.PI * 2); ctx.fill();
+      // blossoms
+      const cols = ['#ff9ec9', '#ffe066', '#ffffff', '#b98cff'];
+      const seed = [[60, 96], [120, 80], [150, 130], [86, 140], [120, 150], [70, 130]];
+      for (let i = 0; i < seed.length; i++) petalFlower(ctx, seed[i][0], seed[i][1], 6, cols[i % cols.length]);
+    });
+
+    // ---- Bush: leafy mound + a couple of flowers ----
+    mk('decor-bush', 150, 110, ctx => {
+      shadow(ctx, 75, 104, 50, 11);
+      ctx.fillStyle = '#3f9e6e';
+      ctx.beginPath(); ctx.arc(75, 78, 44, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#54c389';
+      for (const [cx, cy, r] of [[40, 70, 30], [110, 70, 30], [75, 52, 38]] as const) {
+        ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.fillStyle = 'rgba(160, 240, 190, 0.5)';
+      ctx.beginPath(); ctx.arc(60, 44, 16, 0, Math.PI * 2); ctx.fill();
+      petalFlower(ctx, 56, 64, 6, '#ff9ec9');
+      petalFlower(ctx, 96, 58, 5.4, '#ffe066');
+    });
+
+    // ---- Flower clump: three stems with blooms ----
+    mk('decor-flowers', 110, 110, ctx => {
+      shadow(ctx, 55, 104, 30, 7);
+      const stems: Array<[number, number, string]> = [[34, 44, '#ff9ec9'], [55, 30, '#ffe066'], [76, 48, '#b98cff']];
+      ctx.strokeStyle = '#3f9e6e';
+      ctx.lineWidth = 4; ctx.lineCap = 'round';
+      for (const [hx, hy] of stems) {
+        ctx.beginPath(); ctx.moveTo(55, 100); ctx.quadraticCurveTo((55 + hx) / 2, hy + 30, hx, hy); ctx.stroke();
+      }
+      // leaves
+      ctx.fillStyle = '#54c389';
+      for (const [hx] of stems) {
+        ctx.save(); ctx.translate((55 + hx) / 2, 74); ctx.rotate(hx < 55 ? -0.5 : 0.5);
+        ctx.beginPath(); ctx.ellipse(0, 0, 9, 4, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+      }
+      for (const [hx, hy, col] of stems) petalFlower(ctx, hx, hy, 8, col);
+    });
+
+    // ---- Mushroom: red cap + white dots ----
+    mk('decor-mushroom', 80, 92, ctx => {
+      shadow(ctx, 40, 86, 26, 7);
+      // stem
+      ctx.fillStyle = '#fbeecf';
+      ctx.beginPath(); ctx.moveTo(30, 86); ctx.lineTo(33, 50); ctx.lineTo(47, 50); ctx.lineTo(50, 86);
+      ctx.closePath(); ctx.fill();
+      // cap
+      ctx.fillStyle = '#ff6b6b';
+      ctx.beginPath(); ctx.ellipse(40, 50, 32, 26, 0, Math.PI, 0); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      for (const [dx, dy, dr] of [[28, 36, 5], [48, 32, 6], [40, 48, 4], [18, 46, 3.4]] as const) {
+        ctx.beginPath(); ctx.arc(dx, dy, dr, 0, Math.PI * 2); ctx.fill();
+      }
+    });
+
+    // ---- Pond: water + lily pads + sparkle ----
+    mk('decor-pond', 230, 140, ctx => {
+      ctx.fillStyle = 'rgba(40, 120, 130, 0.30)';
+      ctx.beginPath(); ctx.ellipse(115, 74, 104, 58, 0, 0, Math.PI * 2); ctx.fill();
+      const water = ctx.createRadialGradient(95, 56, 8, 115, 70, 100);
+      water.addColorStop(0, '#aee8ff');
+      water.addColorStop(0.6, '#6fcdf0');
+      water.addColorStop(1, '#4aa6d8');
+      ctx.fillStyle = water;
+      ctx.beginPath(); ctx.ellipse(115, 70, 96, 50, 0, 0, Math.PI * 2); ctx.fill();
+      // highlight crescent
+      ctx.fillStyle = 'rgba(255,255,255,0.45)';
+      ctx.beginPath(); ctx.ellipse(88, 50, 40, 14, -0.3, 0, Math.PI * 2); ctx.fill();
+      // lily pads
+      ctx.fillStyle = '#3fae6e';
+      for (const [lx, ly, lr] of [[150, 86, 18], [78, 92, 15], [140, 50, 13]] as const) {
+        ctx.beginPath(); ctx.arc(lx, ly, lr, 0.4, Math.PI * 2); ctx.fill();
+      }
+      petalFlower(ctx, 150, 84, 6, '#ff9ec9');
+      // sparkles
+      ctx.fillStyle = 'rgba(255,255,255,0.9)';
+      for (const [sx, sy] of [[60, 60], [170, 64], [110, 96]] as const) {
+        ctx.beginPath(); ctx.arc(sx, sy, 2, 0, Math.PI * 2); ctx.fill();
+      }
+    });
+
+    // ---- Lantern: post + warm glowing paper lantern ----
+    mk('decor-lantern', 70, 150, ctx => {
+      shadow(ctx, 35, 144, 18, 6);
+      // post
+      ctx.fillStyle = '#6b4a2c';
+      ctx.fillRect(31, 60, 8, 84);
+      ctx.fillStyle = '#8a6038';
+      ctx.fillRect(32, 60, 3, 84);
+      // hook arm
+      ctx.strokeStyle = '#6b4a2c'; ctx.lineWidth = 5; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(35, 62); ctx.lineTo(35, 50); ctx.stroke();
+      // soft warm halo
+      const halo = ctx.createRadialGradient(35, 40, 0, 35, 40, 34);
+      halo.addColorStop(0, 'rgba(255, 220, 120, 0.7)');
+      halo.addColorStop(1, 'rgba(255, 220, 120, 0)');
+      ctx.fillStyle = halo;
+      ctx.beginPath(); ctx.arc(35, 40, 34, 0, Math.PI * 2); ctx.fill();
+      // lantern body
+      const body = ctx.createLinearGradient(35, 24, 35, 56);
+      body.addColorStop(0, '#fff3c0');
+      body.addColorStop(1, '#ffcf5a');
+      ctx.fillStyle = body;
+      ctx.beginPath(); ctx.ellipse(35, 40, 15, 18, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#e0a83a'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.ellipse(35, 40, 15, 18, 0, 0, Math.PI * 2); ctx.stroke();
+      // top + bottom caps
+      ctx.fillStyle = '#6b4a2c';
+      ctx.fillRect(29, 22, 12, 4);
+      ctx.fillRect(30, 56, 10, 4);
+    });
   }
 
   private drawPad(): void {
@@ -1223,7 +1264,7 @@ export class FactoryScene extends Phaser.Scene {
 
   // §11 operator picker. Pinned to the viewport (scroll-factor 0) along the
   // bottom-center of the screen so it's reachable regardless of the player's
-  // position in the factory. One tile per operator in OPERATOR_ORDER. Tap
+  // position in the garden. One tile per operator in OPERATOR_ORDER. Tap
   // an unlocked operator to select; tap a locked one with sufficient Cores
   // to unlock + select. Surge / Lodestone are flagged `locked: true` (no
   // implementation) and show "COMING SOON".
@@ -1276,7 +1317,7 @@ export class FactoryScene extends Phaser.Scene {
     const colorHex = '#' + def.color.toString(16).padStart(6, '0');
     tile.style.setProperty('--nfr-op-color', colorHex);
 
-    // Triangle silhouette (SVG, mirroring the player ship)
+    // Triangle silhouette (SVG, mirroring the player moon glider)
     const icon = nfrEl('div', 'nfr-operator-tile__icon');
     icon.innerHTML =
       `<svg viewBox="-16 -14 32 28" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">` +
@@ -1478,9 +1519,9 @@ export class FactoryScene extends Phaser.Scene {
     const s = result.streak;
     if (s && s.advanced) {
       const parts: string[] = [];
-      if (s.rewardScrap > 0) parts.push(`+${s.rewardScrap} Scrap`);
-      if (s.rewardCores > 0) parts.push(`+${s.rewardCores} Core${s.rewardCores === 1 ? '' : 's'}`);
-      if (s.rewardCosmetic) parts.push('+1 Cosmetic Shard');
+      if (s.rewardScrap > 0) parts.push(`+${s.rewardScrap} Stardust`);
+      if (s.rewardCores > 0) parts.push(`+${s.rewardCores} Star Heart${s.rewardCores === 1 ? '' : 's'}`);
+      if (s.rewardCosmetic) parts.push('+1 Style Shard');
       if (parts.length > 0) {
         const msg = `${Strings.streakDayPrefix}${s.newStreakDay}${Strings.streakDaySuffix} · ${parts.join(', ')}`;
         this.showHtmlToast(msg, 'green', 3500);
@@ -1658,10 +1699,10 @@ export class FactoryScene extends Phaser.Scene {
   }
 
   // M20 — left-edge rewarded-ad / actions panel. Buttons:
-  //   FACTORY BOOST   (gated on ftueUnlocks.factoryBoost; shows cooldown live)
-  //   CLEAR INFESTATION (visible only when any machines are infested)
-  //   DAILY CRATE     (visible only when player has raided today + not claimed)
-  //   REFINERY        (always after tutorial)
+  //   GARDEN BOOST    (gated on ftueUnlocks.factoryBoost; shows cooldown live)
+  //   CLEAR INFESTATION (visible only when any garden devices are infested)
+  //   DAILY CRATE     (visible only when player flew tonight + not claimed)
+  //   POTION CAULDRON (always after tutorial)
   //   CONTRACTS       (always after tutorial; shows badge when claimable)
   //   PRESTIGE        (visible once threshold met or already prestiged once)
   //
@@ -1673,7 +1714,7 @@ export class FactoryScene extends Phaser.Scene {
     const save = saveSystem.get();
     const col = nfrEl('div', 'nfr-actioncol');
 
-    // FACTORY BOOST.
+    // GARDEN BOOST.
     if (save.ftueUnlocks.factoryBoost) {
       this.factoryBoostBtn = nfrActionBtn(this.factoryBoostLabelText(), 'gold', () =>
         this.handleFactoryBoost(),
@@ -1702,7 +1743,7 @@ export class FactoryScene extends Phaser.Scene {
       col.appendChild(claimed);
     }
 
-    // REFINERY / CONTRACTS / PRESTIGE.
+    // POTION CAULDRON / CONTRACTS / PRESTIGE.
     if (save.tutorialDone) {
       col.appendChild(nfrActionBtn(Strings.zonePanelButton, 'cyan', () =>
         openZonePanel(this, () => {
@@ -1715,7 +1756,7 @@ export class FactoryScene extends Phaser.Scene {
       col.appendChild(nfrActionBtn(Strings.droneBayButton, 'cyan', () => openDroneBayPanel(this, () => this.buildAdPanel())));
 
       // Weekly Boss (Signal Hydra) per blueprint §16.4. HTML/CSS-only
-      // raid mode — visible once tutorial is done so it doesn't crowd
+      // night-flight mode — visible once tutorial is done so it doesn't crowd
       // the early FTUE flow.
       col.appendChild(nfrActionBtn(Strings.weeklyBossButton, 'red', () => openWeeklyBossPanel(this)));
 
@@ -1751,7 +1792,7 @@ export class FactoryScene extends Phaser.Scene {
     this.factoryBoostBtn = null;
   }
 
-  // Per-frame: refresh the FACTORY BOOST label so the cooldown ticks live
+  // Per-frame: refresh the GARDEN BOOST label so the cooldown ticks live
   // (1-second granularity).
   private tickAdPanel(): void {
     if (!this.factoryBoostBtn) return;
@@ -1814,8 +1855,8 @@ export class FactoryScene extends Phaser.Scene {
     if (!granted) return;
     AdManager.activateFactoryBoost();
     void saveSystem.persist();
-    // Regenerator drop cadence depends on SPM which depends on the boost
-    // active state. Rebuild generators so they tick at the boosted rate.
+    // Moonwell drop cadence depends on SPM which depends on the boost
+    // active state. Rebuild moonwells so they tick at the boosted rate.
     this.rebuildFactoryFloor();
     this.buildAdPanel();
   }
@@ -1843,7 +1884,7 @@ export class FactoryScene extends Phaser.Scene {
     const granted = await AdManager.offer(this, {
       title: Strings.adDailyCrateTitle,
       description: Strings.adDailyCrateDesc,
-      borderColor: 0xa76cff,
+      borderColor: 0xb98cff,
       placement: 'dailyCrate',
     });
     this.scene.resume();
@@ -1861,7 +1902,7 @@ export class FactoryScene extends Phaser.Scene {
   }
 
   // M20 OPERATOR TRY-OUT — handler called from the operator tile's "TRY IN
-  // NEXT RAID" button. Sets save.tryOutOperator so the next raid swaps the
+  // NEXT RAID" button. Sets save.tryOutOperator so the next night flight swaps the
   // selected operator for one run (consumed in RaidScene.finishRaid).
   private async handleOperatorTryOut(id: OperatorId): Promise<void> {
     const def = OperatorDefs[id];

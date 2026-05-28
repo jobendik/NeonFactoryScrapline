@@ -482,8 +482,8 @@ export class SettingsMenu {
         'Mute      — speaker icon (top-right)',
         'Auto-aim and auto-fire — no manual aiming.',
         '',
-        'Pickups magnetize within range; Cores drop rarely.',
-        'Hold the green pad to extract; stay past extract for Greed.',
+        'Pickups magnetize within range; Star Hearts drop rarely.',
+        'Hold the green moongate to fly home; linger for Glimmer.',
       ],
       'cyan',
     );
@@ -493,7 +493,7 @@ export class SettingsMenu {
     this.openTextModal(
       'CREDITS',
       [
-        'NEON FACTORY: SCRAPLINE RAID',
+        'STARFALL GARDEN',
         '',
         'Design  — Per blueprint v1.0',
         'Code    — Claude (Runs A / B / C / D)',
@@ -544,7 +544,7 @@ export class SettingsMenu {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'neon-factory-scrapline-save.json';
+    a.download = 'starfall-garden-save.json';
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 0);
     this.toast(Strings.settingsExportSuccess, 'reward');

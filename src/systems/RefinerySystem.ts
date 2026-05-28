@@ -134,8 +134,8 @@ export const RefineryDefs: Record<RefineryId, RefineryDef> = {
   },
   haulerOverdrive: {
     id: 'haulerOverdrive',
-    name: 'Hauler Overdrive',
-    effect: 'Haulers move 40% faster',
+    name: 'Pixie Haste',
+    effect: 'Pixies move 40% faster',
     costCores: 20,
     tier: 2,
     requires: 'droneOverclock1',

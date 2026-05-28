@@ -101,7 +101,7 @@ export const MISSION_DEFS: Record<string, MissionDef> = {
   },
   extractGlassDocks: {
     id: 'extractGlassDocks',
-    label: 'Extract from Glass Docks',
+    label: 'Forage in Crystal Pools',
     target: 1,
     rewardScrap: 120,
     rewardCores: 0,
@@ -113,7 +113,7 @@ export const MISSION_DEFS: Record<string, MissionDef> = {
   },
   bankAlloy: {
     id: 'bankAlloy',
-    label: 'Bank 25 Alloy',
+    label: 'Bank 25 Petals',
     target: 25,
     rewardScrap: 80,
     rewardCores: 0,
@@ -125,7 +125,7 @@ export const MISSION_DEFS: Record<string, MissionDef> = {
   },
   bankCircuits: {
     id: 'bankCircuits',
-    label: 'Bank 10 Circuits',
+    label: 'Bank 10 Essence',
     target: 10,
     rewardScrap: 160,
     rewardCores: 1,

@@ -1,14 +1,14 @@
-// WorkerSystem — manages a pool of FactoryWorker entities on the factory floor.
+// WorkerSystem — manages a pool of FactoryWorker (pixie) entities on the garden floor.
 //
 // Lifecycle:
-//   WorkerSystem.init(scene)   — create workers based on current upgrade level
-//   WorkerSystem.update(dt)    — tick all workers, handle deposits
-//   WorkerSystem.rebuild()     — destroy + recreate workers (called on upgrade purchase)
+//   WorkerSystem.init(scene)   — create pixies based on current upgrade level
+//   WorkerSystem.update(dt)    — tick all pixies, handle deposits
+//   WorkerSystem.rebuild()     — destroy + recreate pixies (called on upgrade purchase)
 //   WorkerSystem.destroy()     — clean up on scene shutdown
 //
 // Economy:
-//   On deposit, calls Economy.bankLoot(value, 0) so all multipliers (Refinery,
-//   Cyber-Core) apply automatically — same hook as the player pickup overlap.
+//   On deposit, calls Economy.bankLoot(value, 0) so all multipliers (potion cauldron,
+//   Star Heart) apply automatically — same hook as the player pickup overlap.
 //   Also emits Events.WORKER_DELIVERED for UI feedback (popup, stat counter).
 
 import Phaser from 'phaser';
@@ -20,8 +20,8 @@ import { Balance } from '../config/Balance';
 import { saveSystem } from '../platform/SaveSystem';
 import { bus, Events } from '../core/EventBus';
 
-// Callback invoked when a worker delivers a load; passes the scrap value and
-// worker position so the scene can show a worldpin popup.
+// Callback invoked when a pixie delivers a load; passes the stardust value and
+// pixie position so the scene can show a worldpin popup.
 export type OnWorkerDeliverCb = (deliveredValue: number, workerX: number, workerY: number) => void;
 
 // Module-level state (no class needed — pattern matches EconomySystem).
@@ -30,14 +30,14 @@ let activeScene: Phaser.Scene | null = null;
 let deliverCb: OnWorkerDeliverCb | null = null;
 
 export const WorkerSystem = {
-  /** Create workers from saved upgrade level. Call once from FactoryScene.create(). */
+  /** Create pixies from saved upgrade level. Call once from FactoryScene.create(). */
   init(scene: Phaser.Scene, onDeliver?: OnWorkerDeliverCb): void {
     activeScene = scene;
     deliverCb = onDeliver ?? null;
     spawnWorkers(scene);
   },
 
-  /** Tick all workers. Call from FactoryScene.update() every frame. */
+  /** Tick all pixies. Call from FactoryScene.update() every frame. */
   update(dt: number, pickups: Phaser.GameObjects.Group): void {
     const dep = Balance.factory.workerDepositPoint;
     const depRange = Balance.workers.depositRange;
@@ -59,14 +59,14 @@ export const WorkerSystem = {
     }
   },
 
-  /** Destroy and re-create all workers (e.g. after an upgrade purchase). */
+  /** Destroy and re-create all pixies (e.g. after an upgrade purchase). */
   rebuild(): void {
     for (const w of workers) w.destroy();
     workers = [];
     if (activeScene) spawnWorkers(activeScene);
   },
 
-  /** Tear down all workers. Call from FactoryScene.shutdown(). */
+  /** Tear down all pixies. Call from FactoryScene.shutdown(). */
   destroy(): void {
     for (const w of workers) w.destroy();
     workers = [];

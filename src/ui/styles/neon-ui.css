@@ -1,41 +1,42 @@
 /* ============================================================================
- * Neon UI design system — "Cyberpunk Field Terminal" (2026 redesign).
+ * Starfall Garden UI design system — "Moonlit Glass" (2026 re-theme).
  *
  * Aesthetic goals:
- *   - Chamfered diagonal-cut panels (clip-path polygon) replacing rounded
- *     corners. Reads as combat HUD rather than mobile-app card.
+ *   - Faceted, gem-cut panels (clip-path polygon) that read like crystal /
+ *     moonlit glass rather than rounded mobile cards.
  *   - Layered depth (void → surface → raise → float) for clear hierarchy.
- *   - Controlled chromatic aberration on titles, CRT scanlines on chrome,
- *     L-shaped bracket glyphs in panel corners.
- *   - Decisive 160–240ms motion with snap & bounce easings.
- *   - Brand palette unchanged: cyan #22f6ff, violet #a76cff, gold #ffd75a.
+ *   - Soft glowing titles, a faint shimmer over chrome, and L-shaped bracket
+ *     glyphs in panel corners (like garden lantern brackets).
+ *   - Gentle 160–240ms motion with snap & bounce easings.
+ *   - Magical palette: moon blue #7cc9ff, lavender #b98cff, star gold #ffd75a,
+ *     bloom green #72ff9f, rose #ff416b, over deep midnight purple.
  * ========================================================================== */
 
-@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;800;900&family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@500;600;700&family=Nunito:wght@400;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap');
 
 :root {
   /* ----- Depth tiers (background) ---------------------------------------- */
-  --nfr-bg-void:    #010307;
-  --nfr-bg-surface: #0a1220;
-  --nfr-bg-raise:   #111e30;
-  --nfr-bg-float:   #152540;
+  --nfr-bg-void:    #0c0720;
+  --nfr-bg-surface: #181232;
+  --nfr-bg-raise:   #221a40;
+  --nfr-bg-float:   #2c2252;
 
   /* ----- Brand palette + opacity tints ----------------------------------- */
-  --nfr-cyan:       #22f6ff;
-  --nfr-cyan-10:    rgba(34, 246, 255, 0.10);
-  --nfr-cyan-20:    rgba(34, 246, 255, 0.20);
-  --nfr-cyan-30:    rgba(34, 246, 255, 0.30);
-  --nfr-cyan-45:    rgba(34, 246, 255, 0.45);
-  --nfr-cyan-60:    rgba(34, 246, 255, 0.60);
-  --nfr-cyan-80:    rgba(34, 246, 255, 0.80);
+  --nfr-cyan:       #7cc9ff;
+  --nfr-cyan-10:    rgba(124, 201, 255, 0.10);
+  --nfr-cyan-20:    rgba(124, 201, 255, 0.20);
+  --nfr-cyan-30:    rgba(124, 201, 255, 0.30);
+  --nfr-cyan-45:    rgba(124, 201, 255, 0.45);
+  --nfr-cyan-60:    rgba(124, 201, 255, 0.60);
+  --nfr-cyan-80:    rgba(124, 201, 255, 0.80);
 
-  --nfr-violet:     #a76cff;
-  --nfr-violet-10:  rgba(167, 108, 255, 0.10);
-  --nfr-violet-20:  rgba(167, 108, 255, 0.20);
-  --nfr-violet-30:  rgba(167, 108, 255, 0.30);
-  --nfr-violet-45:  rgba(167, 108, 255, 0.45);
-  --nfr-violet-60:  rgba(167, 108, 255, 0.60);
-  --nfr-violet-80:  rgba(167, 108, 255, 0.80);
+  --nfr-violet:     #b98cff;
+  --nfr-violet-10:  rgba(185, 140, 255, 0.10);
+  --nfr-violet-20:  rgba(185, 140, 255, 0.20);
+  --nfr-violet-30:  rgba(185, 140, 255, 0.30);
+  --nfr-violet-45:  rgba(185, 140, 255, 0.45);
+  --nfr-violet-60:  rgba(185, 140, 255, 0.60);
+  --nfr-violet-80:  rgba(185, 140, 255, 0.80);
 
   --nfr-gold:       #ffd75a;
   --nfr-gold-10:    rgba(255, 215, 90, 0.10);
@@ -62,25 +63,25 @@
   --nfr-rarity-epic:   var(--nfr-violet);
   --nfr-rarity-legend: var(--nfr-gold);
 
-  --nfr-glow-cyan-tight:   0 0 6px rgba(34, 246, 255, 0.55);
-  --nfr-glow-cyan-mid:     0 0 18px rgba(34, 246, 255, 0.45);
-  --nfr-glow-cyan-wide:    0 0 40px rgba(34, 246, 255, 0.28);
-  --nfr-glow-violet-tight: 0 0 6px rgba(167, 108, 255, 0.55);
-  --nfr-glow-violet-mid:   0 0 18px rgba(167, 108, 255, 0.45);
-  --nfr-glow-violet-wide:  0 0 40px rgba(167, 108, 255, 0.28);
+  --nfr-glow-cyan-tight:   0 0 6px rgba(124, 201, 255, 0.55);
+  --nfr-glow-cyan-mid:     0 0 18px rgba(124, 201, 255, 0.45);
+  --nfr-glow-cyan-wide:    0 0 40px rgba(124, 201, 255, 0.28);
+  --nfr-glow-violet-tight: 0 0 6px rgba(185, 140, 255, 0.55);
+  --nfr-glow-violet-mid:   0 0 18px rgba(185, 140, 255, 0.45);
+  --nfr-glow-violet-wide:  0 0 40px rgba(185, 140, 255, 0.28);
   --nfr-glow-gold-tight:   0 0 6px rgba(255, 215, 90, 0.60);
   --nfr-glow-gold-mid:     0 0 18px rgba(255, 215, 90, 0.45);
   --nfr-glow-gold-wide:    0 0 40px rgba(255, 215, 90, 0.28);
   --nfr-glow-green-mid:    0 0 18px rgba(114, 255, 159, 0.5);
   --nfr-glow-red-mid:      0 0 18px rgba(255, 65, 107, 0.55);
 
-  --nfr-border-panel:  1px solid rgba(34, 246, 255, 0.35);
-  --nfr-border-card:   2px solid rgba(34, 246, 255, 0.5);
+  --nfr-border-panel:  1px solid rgba(124, 201, 255, 0.35);
+  --nfr-border-card:   2px solid rgba(124, 201, 255, 0.5);
 
-  --nfr-surface-panel: linear-gradient(160deg, rgba(21, 37, 64, 0.96) 0%, rgba(10, 18, 32, 0.98) 100%);
-  --nfr-surface-card:  linear-gradient(180deg, rgba(17, 30, 48, 0.95) 0%, rgba(6, 10, 18, 0.96) 100%);
-  --nfr-surface-modal: linear-gradient(160deg, rgba(17, 28, 48, 0.98) 0%, rgba(6, 10, 22, 0.99) 100%);
-  --nfr-surface-toast: linear-gradient(160deg, rgba(15, 25, 40, 0.94) 0%, rgba(8, 14, 24, 0.96) 100%);
+  --nfr-surface-panel: linear-gradient(160deg, rgba(44, 33, 76, 0.96) 0%, rgba(24, 18, 50, 0.98) 100%);
+  --nfr-surface-card:  linear-gradient(180deg, rgba(36, 26, 64, 0.95) 0%, rgba(18, 12, 40, 0.96) 100%);
+  --nfr-surface-modal: linear-gradient(160deg, rgba(36, 25, 66, 0.98) 0%, rgba(18, 12, 42, 0.99) 100%);
+  --nfr-surface-toast: linear-gradient(160deg, rgba(32, 22, 58, 0.94) 0%, rgba(20, 13, 44, 0.96) 100%);
 
   --nfr-sp-1:  4px;
   --nfr-sp-2:  8px;
@@ -103,14 +104,14 @@
   --nfr-text-xl:  clamp(18px, 1.9vw, 22px);
   --nfr-text-2xl: clamp(22px, 2.6vw, 32px);
 
-  --nfr-font-display: 'Orbitron', 'Rajdhani', system-ui, sans-serif;
-  --nfr-font-ui:      'Rajdhani', 'Inter', system-ui, sans-serif;
+  --nfr-font-display: 'Quicksand', 'Nunito', system-ui, sans-serif;
+  --nfr-font-ui:      'Nunito', 'Quicksand', system-ui, sans-serif;
   --nfr-font-mono:    'JetBrains Mono', 'Fira Code', Consolas, monospace;
 
   /* Legacy compat aliases (preserved so existing call sites compile). */
   --nfr-bg:        var(--nfr-bg-void);
-  --nfr-bg-elev:   rgba(10, 16, 26, 0.92);
-  --nfr-bg-elev-2: rgba(20, 28, 44, 0.88);
+  --nfr-bg-elev:   rgba(26, 18, 48, 0.92);
+  --nfr-bg-elev-2: rgba(40, 28, 66, 0.88);
   --nfr-cyan-soft: var(--nfr-cyan-60);
   --nfr-cyan-glow: var(--nfr-cyan-45);
   --nfr-violet-soft: var(--nfr-violet-60);
@@ -190,7 +191,7 @@
   padding: 28px 32px 24px;
   background:
     var(--nfr-surface-modal),
-    repeating-linear-gradient(0deg, rgba(34, 246, 255, 0.015) 0 1px, transparent 1px 4px);
+    repeating-linear-gradient(0deg, rgba(124, 201, 255, 0.015) 0 1px, transparent 1px 4px);
   border: var(--nfr-border-panel);
   clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px));
   backdrop-filter: blur(10px) saturate(140%);
@@ -210,8 +211,8 @@
 .nfr-panel.green  { border-color: var(--nfr-green-60); }
 
 /* Outer glow via wrapping element (filter:drop-shadow respects clip-path). */
-.nfr-panel-glow-cyan   { filter: drop-shadow(0 0 22px rgba(34, 246, 255, 0.3)) drop-shadow(0 0 48px rgba(34, 246, 255, 0.18)); }
-.nfr-panel-glow-violet { filter: drop-shadow(0 0 22px rgba(167, 108, 255, 0.32)) drop-shadow(0 0 48px rgba(167, 108, 255, 0.18)); }
+.nfr-panel-glow-cyan   { filter: drop-shadow(0 0 22px rgba(124, 201, 255, 0.3)) drop-shadow(0 0 48px rgba(124, 201, 255, 0.18)); }
+.nfr-panel-glow-violet { filter: drop-shadow(0 0 22px rgba(185, 140, 255, 0.32)) drop-shadow(0 0 48px rgba(185, 140, 255, 0.18)); }
 .nfr-panel-glow-gold   { filter: drop-shadow(0 0 22px rgba(255, 215, 90, 0.32)) drop-shadow(0 0 48px rgba(255, 215, 90, 0.2)); }
 
 /* Compatibility — the previous design used ::before/::after corner brackets
@@ -254,11 +255,11 @@
   color: var(--nfr-cyan);
   text-shadow:
     0 0 8px var(--nfr-cyan-45),
-    0 0 24px rgba(34, 246, 255, 0.25),
+    0 0 24px rgba(124, 201, 255, 0.25),
     1px 0 0 rgba(255, 65, 107, 0.18),
-    -1px 0 0 rgba(34, 246, 255, 0.18);
+    -1px 0 0 rgba(124, 201, 255, 0.18);
 }
-.nfr-panel.violet > .nfr-panel__title { color: var(--nfr-violet); text-shadow: 0 0 8px var(--nfr-violet-45), 0 0 24px rgba(167, 108, 255, 0.25); }
+.nfr-panel.violet > .nfr-panel__title { color: var(--nfr-violet); text-shadow: 0 0 8px var(--nfr-violet-45), 0 0 24px rgba(185, 140, 255, 0.25); }
 .nfr-panel.gold   > .nfr-panel__title { color: var(--nfr-gold);   text-shadow: 0 0 8px var(--nfr-gold-45),   0 0 24px rgba(255, 215, 90, 0.25); }
 .nfr-panel.red    > .nfr-panel__title { color: var(--nfr-red);    text-shadow: 0 0 8px var(--nfr-red-30),    0 0 24px rgba(255, 65, 107, 0.25); }
 
@@ -295,7 +296,7 @@
   letter-spacing: 0.20em;
   text-transform: uppercase;
   color: var(--nfr-cyan);
-  background: linear-gradient(180deg, rgba(34, 246, 255, 0.18), rgba(34, 246, 255, 0.04));
+  background: linear-gradient(180deg, rgba(124, 201, 255, 0.18), rgba(124, 201, 255, 0.04));
   border: 1px solid var(--nfr-cyan-60);
   clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
   cursor: pointer;
@@ -318,14 +319,14 @@
 }
 .nfr-btn:hover {
   filter: brightness(1.18);
-  background: linear-gradient(180deg, rgba(34, 246, 255, 0.30), rgba(34, 246, 255, 0.08));
+  background: linear-gradient(180deg, rgba(124, 201, 255, 0.30), rgba(124, 201, 255, 0.08));
   transform: translateY(-1px);
 }
 .nfr-btn:hover::after { transform: translateX(100%); }
 .nfr-btn:active { transform: translateY(1px); }
 
-.nfr-btn.violet { color: var(--nfr-violet); border-color: var(--nfr-violet-60); background: linear-gradient(180deg, rgba(167, 108, 255, 0.18), rgba(167, 108, 255, 0.04)); text-shadow: var(--nfr-glow-violet-tight); }
-.nfr-btn.violet:hover { background: linear-gradient(180deg, rgba(167, 108, 255, 0.30), rgba(167, 108, 255, 0.08)); }
+.nfr-btn.violet { color: var(--nfr-violet); border-color: var(--nfr-violet-60); background: linear-gradient(180deg, rgba(185, 140, 255, 0.18), rgba(185, 140, 255, 0.04)); text-shadow: var(--nfr-glow-violet-tight); }
+.nfr-btn.violet:hover { background: linear-gradient(180deg, rgba(185, 140, 255, 0.30), rgba(185, 140, 255, 0.08)); }
 .nfr-btn.gold   { color: var(--nfr-gold);   border-color: var(--nfr-gold-60);   background: linear-gradient(180deg, rgba(255, 215, 90, 0.22), rgba(255, 215, 90, 0.04)); text-shadow: var(--nfr-glow-gold-tight); }
 .nfr-btn.gold:hover   { background: linear-gradient(180deg, rgba(255, 215, 90, 0.34), rgba(255, 215, 90, 0.08)); }
 .nfr-btn.green  { color: var(--nfr-green);  border-color: var(--nfr-green-60);  background: linear-gradient(180deg, rgba(114, 255, 159, 0.18), rgba(114, 255, 159, 0.04)); text-shadow: 0 0 6px rgba(114, 255, 159, 0.55); }
@@ -366,12 +367,12 @@
   gap: 14px;
   align-items: center;
   padding: 13px 16px;
-  background: linear-gradient(180deg, rgba(34, 246, 255, 0.04), rgba(34, 246, 255, 0));
+  background: linear-gradient(180deg, rgba(124, 201, 255, 0.04), rgba(124, 201, 255, 0));
   border: 1px solid var(--nfr-cyan-20);
   clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
   transition: border-color 200ms ease, background 200ms ease;
 }
-.nfr-row:hover    { border-color: var(--nfr-cyan-60); background: linear-gradient(180deg, rgba(34, 246, 255, 0.08), rgba(34, 246, 255, 0.01)); }
+.nfr-row:hover    { border-color: var(--nfr-cyan-60); background: linear-gradient(180deg, rgba(124, 201, 255, 0.08), rgba(124, 201, 255, 0.01)); }
 .nfr-row.is-owned { border-color: rgba(114, 255, 159, 0.55); background: linear-gradient(180deg, rgba(114, 255, 159, 0.08), rgba(114, 255, 159, 0)); }
 .nfr-row.is-locked { opacity: 0.55; }
 .nfr-row__main { display: flex; flex-direction: column; gap: 2px; }
@@ -402,7 +403,7 @@
   align-items: center;
   padding: 22px 18px 24px;
   background:
-    radial-gradient(ellipse at top, rgba(34, 246, 255, 0.12), transparent 60%),
+    radial-gradient(ellipse at top, rgba(124, 201, 255, 0.12), transparent 60%),
     var(--nfr-surface-card);
   border: 2px solid var(--nfr-rarity-common);
   clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
@@ -424,13 +425,13 @@
 .nfr-card.rare {
   border-color: var(--nfr-rarity-rare);
   background:
-    radial-gradient(ellipse at top, rgba(34, 246, 255, 0.22), transparent 60%),
+    radial-gradient(ellipse at top, rgba(124, 201, 255, 0.22), transparent 60%),
     var(--nfr-surface-card);
 }
 .nfr-card.epic {
   border-color: var(--nfr-rarity-epic);
   background:
-    radial-gradient(ellipse at top, rgba(167, 108, 255, 0.26), transparent 60%),
+    radial-gradient(ellipse at top, rgba(185, 140, 255, 0.26), transparent 60%),
     linear-gradient(180deg, rgba(28, 18, 48, 0.95), rgba(10, 6, 22, 0.96));
 }
 
@@ -522,7 +523,7 @@
   margin: 0 auto var(--nfr-sp-4);
 }
 .nfr-draft-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
-.nfr-draft-ring__track { stroke: rgba(34, 246, 255, 0.15); fill: none; }
+.nfr-draft-ring__track { stroke: rgba(124, 201, 255, 0.15); fill: none; }
 .nfr-draft-ring__fill {
   fill: none;
   stroke: var(--nfr-cyan);
@@ -555,9 +556,9 @@
   inset: -30%;
   background: conic-gradient(from 0deg,
     transparent 0deg,
-    rgba(34, 246, 255, 0.06) 90deg,
+    rgba(124, 201, 255, 0.06) 90deg,
     transparent 180deg,
-    rgba(167, 108, 255, 0.05) 270deg,
+    rgba(185, 140, 255, 0.05) 270deg,
     transparent 360deg
   );
   animation: nfr-conic-spin 12s linear infinite;
@@ -596,7 +597,7 @@
   gap: 10px;
   align-items: center;
   padding: 10px 14px;
-  background: linear-gradient(180deg, rgba(20, 28, 44, 0.88), rgba(8, 12, 22, 0.92));
+  background: linear-gradient(180deg, rgba(40, 28, 66, 0.88), rgba(22, 14, 44, 0.92));
   border: 1px solid var(--nfr-cyan-30);
   clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
   position: relative;
@@ -615,7 +616,7 @@
   font-weight: 700;
   font-size: 14px;
   color: var(--nfr-cyan);
-  background: linear-gradient(180deg, rgba(34, 246, 255, 0.16), rgba(34, 246, 255, 0.04));
+  background: linear-gradient(180deg, rgba(124, 201, 255, 0.16), rgba(124, 201, 255, 0.04));
   border: 1px solid var(--nfr-cyan-60);
   clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px));
   padding: 7px 12px;
@@ -628,7 +629,7 @@
   user-select: none;
   font-variant-numeric: tabular-nums;
 }
-.nfr-upgrade__cost:hover { filter: brightness(1.2); background: linear-gradient(180deg, rgba(34, 246, 255, 0.28), rgba(34, 246, 255, 0.08)); }
+.nfr-upgrade__cost:hover { filter: brightness(1.2); background: linear-gradient(180deg, rgba(124, 201, 255, 0.28), rgba(124, 201, 255, 0.08)); }
 .nfr-upgrade__cost.is-disabled {
   color: var(--nfr-ink-mute);
   background: linear-gradient(180deg, rgba(60, 70, 80, 0.16), rgba(60, 70, 80, 0.04));
@@ -668,13 +669,13 @@
 .nfr-hpbar__track {
   width: 100%;
   height: 20px;
-  background: rgba(34, 246, 255, 0.08);
+  background: rgba(124, 201, 255, 0.08);
   position: relative;
   overflow: hidden;
 }
 .nfr-hpbar__fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--nfr-cyan), #6bf9ff);
+  background: linear-gradient(90deg, var(--nfr-cyan), #a6dcff);
   transition: width 220ms var(--nfr-ease-snap), background 160ms ease;
   width: 100%;
   position: relative;
@@ -958,8 +959,8 @@
   color: var(--nfr-cyan);
   text-shadow: var(--nfr-glow-cyan-tight);
   background:
-    linear-gradient(180deg, rgba(34, 246, 255, 0.18), rgba(34, 246, 255, 0.04)),
-    rgba(8, 12, 22, 0.92);
+    linear-gradient(180deg, rgba(124, 201, 255, 0.18), rgba(124, 201, 255, 0.04)),
+    rgba(22, 14, 44, 0.92);
   border: 1px solid var(--nfr-cyan-60);
   clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
   cursor: pointer;
@@ -980,7 +981,7 @@
 .nfr-action:hover {
   transform: translateX(3px);
   filter: brightness(1.2);
-  background: linear-gradient(180deg, rgba(34, 246, 255, 0.30), rgba(34, 246, 255, 0.08)), rgba(8, 12, 22, 0.92);
+  background: linear-gradient(180deg, rgba(124, 201, 255, 0.30), rgba(124, 201, 255, 0.08)), rgba(22, 14, 44, 0.92);
 }
 .nfr-action:active { transform: translateX(3px) translateY(1px); }
 .nfr-action.gold {
@@ -996,11 +997,11 @@
   color: var(--nfr-violet);
   border-color: var(--nfr-violet-60);
   background:
-    linear-gradient(180deg, rgba(167, 108, 255, 0.20), rgba(167, 108, 255, 0.04)),
+    linear-gradient(180deg, rgba(185, 140, 255, 0.20), rgba(185, 140, 255, 0.04)),
     rgba(14, 8, 22, 0.92);
   text-shadow: var(--nfr-glow-violet-tight);
 }
-.nfr-action.violet:hover { background: linear-gradient(180deg, rgba(167, 108, 255, 0.32), rgba(167, 108, 255, 0.08)), rgba(14, 8, 22, 0.92); }
+.nfr-action.violet:hover { background: linear-gradient(180deg, rgba(185, 140, 255, 0.32), rgba(185, 140, 255, 0.08)), rgba(14, 8, 22, 0.92); }
 .nfr-action.red {
   color: var(--nfr-red);
   border-color: var(--nfr-red-60);
@@ -1096,7 +1097,7 @@
   text-transform: uppercase;
   color: var(--nfr-violet);
   text-shadow: var(--nfr-glow-violet-tight);
-  background: linear-gradient(180deg, rgba(167, 108, 255, 0.18), rgba(167, 108, 255, 0.04)), rgba(14, 8, 22, 0.92);
+  background: linear-gradient(180deg, rgba(185, 140, 255, 0.18), rgba(185, 140, 255, 0.04)), rgba(14, 8, 22, 0.92);
   border: 1px solid var(--nfr-violet-60);
   clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
   cursor: pointer;
@@ -1104,7 +1105,7 @@
   transition: filter 180ms, background 180ms;
   user-select: none;
 }
-.nfr-topright-btn:hover { filter: brightness(1.2); background: linear-gradient(180deg, rgba(167, 108, 255, 0.30), rgba(167, 108, 255, 0.08)), rgba(14, 8, 22, 0.92); }
+.nfr-topright-btn:hover { filter: brightness(1.2); background: linear-gradient(180deg, rgba(185, 140, 255, 0.30), rgba(185, 140, 255, 0.08)), rgba(14, 8, 22, 0.92); }
 
 /* ============================================================================
  * Floating text (damage numbers, scrap pickups, milestones).
@@ -1137,7 +1138,7 @@
 .nfr-float-text[data-kind="cores"] { color: var(--nfr-gold); text-shadow: var(--nfr-glow-gold-tight), 0 1px 2px rgba(0, 0, 0, 0.9); }
 .nfr-float-text[data-kind="score"] {
   color: var(--nfr-violet);
-  background: rgba(167, 108, 255, 0.16);
+  background: rgba(185, 140, 255, 0.16);
   border: 1px solid var(--nfr-violet-60);
   padding: 2px 8px;
   border-radius: 999px;
@@ -1680,7 +1681,7 @@
   align-items: center;
   padding: 8px 12px;
   border: 1px solid var(--nfr-cyan-20);
-  background: rgba(34, 246, 255, 0.03);
+  background: rgba(124, 201, 255, 0.03);
 }
 .nfr-settings__label {
   font-family: var(--nfr-font-display);
@@ -1710,7 +1711,7 @@
 .nfr-slider__track {
   width: 100%;
   height: 4px;
-  background: rgba(34, 246, 255, 0.15);
+  background: rgba(124, 201, 255, 0.15);
   border: 1px solid var(--nfr-cyan-30);
   position: relative;
 }
@@ -1718,7 +1719,7 @@
   position: absolute;
   left: 0; top: 0;
   height: 100%;
-  background: linear-gradient(90deg, var(--nfr-cyan), #6bf9ff);
+  background: linear-gradient(90deg, var(--nfr-cyan), #a6dcff);
   filter: drop-shadow(0 0 4px var(--nfr-cyan-45));
   transition: width 80ms linear;
 }
@@ -1741,7 +1742,7 @@
   font-size: 11px;
   letter-spacing: 0.20em;
   padding: 5px 12px;
-  background: rgba(34, 246, 255, 0.06);
+  background: rgba(124, 201, 255, 0.06);
   border: 1px solid var(--nfr-cyan-30);
   color: var(--nfr-ink-dim);
   cursor: pointer;
@@ -1752,7 +1753,7 @@
 .nfr-pill:hover    { color: var(--nfr-cyan); }
 .nfr-pill.is-active {
   color: var(--nfr-cyan);
-  background: rgba(34, 246, 255, 0.18);
+  background: rgba(124, 201, 255, 0.18);
   border-color: var(--nfr-cyan-60);
   text-shadow: var(--nfr-glow-cyan-tight);
 }
@@ -1771,7 +1772,7 @@
   width: 16px;
   height: 16px;
   border: 1px solid var(--nfr-cyan-60);
-  background: rgba(34, 246, 255, 0.08);
+  background: rgba(124, 201, 255, 0.08);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1824,7 +1825,7 @@
   font-size: 12px;
   line-height: 1.55;
   color: var(--nfr-ink);
-  background: rgba(34, 246, 255, 0.04);
+  background: rgba(124, 201, 255, 0.04);
   border: 1px solid var(--nfr-cyan-20);
   padding: 12px 14px;
   white-space: pre-wrap;
@@ -1848,8 +1849,8 @@
     "status status";
   gap: 4px 10px;
   padding: 10px 12px;
-  border: 1px solid var(--nfr-violet-30, rgba(167, 108, 255, 0.30));
-  background: rgba(167, 108, 255, 0.04);
+  border: 1px solid var(--nfr-violet-30, rgba(185, 140, 255, 0.30));
+  background: rgba(185, 140, 255, 0.04);
   clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px));
   transition: all 160ms ease;
 }
@@ -1889,14 +1890,14 @@
 .nfr-cosmetic-tile.is-locked .nfr-cosmetic-tile__status { color: var(--nfr-ink-dim); }
 .nfr-cosmetic-tile.is-equipped {
   border-color: var(--nfr-cyan-60);
-  background: rgba(34, 246, 255, 0.08);
+  background: rgba(124, 201, 255, 0.08);
   box-shadow: 0 0 0 1px var(--nfr-cyan-30) inset;
 }
 .nfr-cosmetic-tile.is-equipped .nfr-cosmetic-tile__status { color: var(--nfr-cyan); }
 .nfr-cosmetic-tile.is-actionable { cursor: pointer; }
 .nfr-cosmetic-tile.is-actionable:hover {
   border-color: var(--nfr-violet);
-  background: rgba(167, 108, 255, 0.10);
+  background: rgba(185, 140, 255, 0.10);
 }
 
 .nfr-achievement-list {
@@ -1986,11 +1987,11 @@
   z-index: 40;
 }
 .nfr-operator-panel__header {
-  font-family: var(--nfr-font-display, 'Orbitron', sans-serif);
+  font-family: var(--nfr-font-display, 'Quicksand', sans-serif);
   font-size: 12px;
   letter-spacing: 0.28em;
-  color: var(--nfr-cyan, #22f6ff);
-  text-shadow: 0 0 8px rgba(34, 246, 255, 0.55);
+  color: var(--nfr-cyan, #7cc9ff);
+  text-shadow: 0 0 8px rgba(124, 201, 255, 0.55);
   text-transform: uppercase;
 }
 .nfr-operator-panel__teaser {
@@ -2015,7 +2016,7 @@
   pointer-events: auto;
 }
 .nfr-operator-tile {
-  --nfr-op-color: #22f6ff;
+  --nfr-op-color: #7cc9ff;
   position: relative;
   width: 112px;
   min-height: 124px;
@@ -2063,7 +2064,7 @@
 }
 .nfr-operator-tile__icon svg { width: 100%; height: 100%; }
 .nfr-operator-tile__name {
-  font-family: var(--nfr-font-display, 'Orbitron', sans-serif);
+  font-family: var(--nfr-font-display, 'Quicksand', sans-serif);
   font-size: 13px;
   letter-spacing: 0.16em;
   color: #fff;
@@ -2073,7 +2074,7 @@
   font-family: var(--nfr-font-mono, 'JetBrains Mono', monospace);
   font-size: 10px;
   letter-spacing: 0.10em;
-  color: var(--nfr-cyan, #22f6ff);
+  color: var(--nfr-cyan, #7cc9ff);
   text-transform: uppercase;
 }
 .nfr-operator-tile.is-selected .nfr-operator-tile__status { color: var(--nfr-green, #72ff9f); }
@@ -2099,7 +2100,7 @@
   border: 1px solid rgba(255, 255, 255, 0.9);
   background: linear-gradient(180deg, #b97cff, #8a4dff);
   color: #08020e;
-  font-family: var(--nfr-font-display, 'Orbitron', sans-serif);
+  font-family: var(--nfr-font-display, 'Quicksand', sans-serif);
   font-size: 9px;
   letter-spacing: 0.10em;
   text-transform: uppercase;
@@ -2120,7 +2121,7 @@
   background: rgba(8, 14, 10, 0.95);
   border: 1px solid var(--nfr-green, #72ff9f);
   color: var(--nfr-green, #72ff9f);
-  font-family: var(--nfr-font-display, 'Orbitron', sans-serif);
+  font-family: var(--nfr-font-display, 'Quicksand', sans-serif);
   font-size: 9px;
   letter-spacing: 0.12em;
 }
@@ -2149,11 +2150,11 @@
   100% { opacity: 1; transform: none; }
 }
 .nfr-quest-card__title {
-  font-family: var(--nfr-font-display, 'Orbitron', sans-serif);
+  font-family: var(--nfr-font-display, 'Quicksand', sans-serif);
   font-size: 13px;
   letter-spacing: 0.28em;
-  color: var(--nfr-cyan, #22f6ff);
-  text-shadow: 0 0 8px rgba(34, 246, 255, 0.5);
+  color: var(--nfr-cyan, #7cc9ff);
+  text-shadow: 0 0 8px rgba(124, 201, 255, 0.5);
   text-transform: uppercase;
 }
 .nfr-quest-card__text {
@@ -2166,8 +2167,8 @@
   font-family: var(--nfr-font-mono, 'JetBrains Mono', monospace);
   font-size: 13px;
   font-weight: 700;
-  color: var(--nfr-cyan, #22f6ff);
-  text-shadow: 0 0 6px rgba(34, 246, 255, 0.4);
+  color: var(--nfr-cyan, #7cc9ff);
+  text-shadow: 0 0 6px rgba(124, 201, 255, 0.4);
 }
 .nfr-quest-card__progress.is-complete {
   color: var(--nfr-green, #72ff9f);
@@ -2186,7 +2187,7 @@
   border: 2px solid rgba(255, 255, 255, 0.9);
   background: linear-gradient(180deg, #8effc0, #4ce28a);
   color: #04140a;
-  font-family: var(--nfr-font-display, 'Orbitron', sans-serif);
+  font-family: var(--nfr-font-display, 'Quicksand', sans-serif);
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.16em;
@@ -2229,7 +2230,7 @@
 }
 
 .nfr-pad-hint {
-  font-family: var(--nfr-font-display, 'Orbitron', sans-serif);
+  font-family: var(--nfr-font-display, 'Quicksand', sans-serif);
   font-size: 14px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -2238,7 +2239,7 @@
 }
 
 .nfr-pad-zone {
-  font-family: var(--nfr-font-display, 'Orbitron', sans-serif);
+  font-family: var(--nfr-font-display, 'Quicksand', sans-serif);
   font-size: 13px;
   letter-spacing: 0.22em;
   text-transform: uppercase;
@@ -2247,7 +2248,7 @@
 }
 
 .nfr-pad-deploy-prompt {
-  font-family: var(--nfr-font-display, 'Orbitron', sans-serif);
+  font-family: var(--nfr-font-display, 'Quicksand', sans-serif);
   font-size: 30px;
   font-weight: 700;
   letter-spacing: 0.16em;
@@ -2267,7 +2268,7 @@
   border: 2px solid rgba(255, 255, 255, 0.85);
   background: linear-gradient(180deg, #b78aff, #7a4ee0);
   color: #ffffff;
-  font-family: var(--nfr-font-display, 'Orbitron', sans-serif);
+  font-family: var(--nfr-font-display, 'Quicksand', sans-serif);
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.18em;
@@ -2275,7 +2276,7 @@
   padding: 8px 22px;
   cursor: pointer;
   clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
-  box-shadow: 0 0 18px rgba(167, 108, 255, 0.65);
+  box-shadow: 0 0 18px rgba(185, 140, 255, 0.65);
   transition: filter 0.15s ease, transform 0.15s ease;
 }
 .nfr-pad-seed-btn:hover { filter: brightness(1.15); transform: translateY(-1px); }
@@ -2291,8 +2292,8 @@
   font-size: 10px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--nfr-violet, #a76cff);
-  text-shadow: 0 0 8px rgba(167, 108, 255, 0.5), 0 1px 4px rgba(0, 0, 0, 0.9);
+  color: var(--nfr-violet, #b98cff);
+  text-shadow: 0 0 8px rgba(185, 140, 255, 0.5), 0 1px 4px rgba(0, 0, 0, 0.9);
 }
 
 /* Decorative machine labels (REACTOR / COIL etc.) pinned to world props. */
@@ -2305,8 +2306,8 @@
   text-shadow: 0 0 8px rgba(0, 0, 0, 0.9), 0 1px 3px rgba(0, 0, 0, 0.95);
 }
 .nfr-machine-label.gold { color: var(--nfr-gold, #ffd75a); text-shadow: 0 0 8px rgba(255, 215, 90, 0.55), 0 1px 3px rgba(0, 0, 0, 0.95); }
-.nfr-machine-label.cyan { color: var(--nfr-cyan, #22f6ff); text-shadow: 0 0 8px rgba(34, 246, 255, 0.55), 0 1px 3px rgba(0, 0, 0, 0.95); }
-.nfr-machine-label.violet { color: var(--nfr-violet, #a76cff); text-shadow: 0 0 8px rgba(167, 108, 255, 0.55), 0 1px 3px rgba(0, 0, 0, 0.95); }
+.nfr-machine-label.cyan { color: var(--nfr-cyan, #7cc9ff); text-shadow: 0 0 8px rgba(124, 201, 255, 0.55), 0 1px 3px rgba(0, 0, 0, 0.95); }
+.nfr-machine-label.violet { color: var(--nfr-violet, #b98cff); text-shadow: 0 0 8px rgba(185, 140, 255, 0.55), 0 1px 3px rgba(0, 0, 0, 0.95); }
 
 /* ===== Phase 6 — RaidScene + HUDScene HTML overlays ============================= */
 
@@ -2340,7 +2341,7 @@
   letter-spacing: 0.04em;
   color: #ffffff;
   text-align: center;
-  text-shadow: 0 0 18px rgba(0, 0, 0, 0.9), 0 4px 10px rgba(0, 0, 0, 0.95), 0 0 4px rgba(34, 246, 255, 0.35);
+  text-shadow: 0 0 18px rgba(0, 0, 0, 0.9), 0 4px 10px rgba(0, 0, 0, 0.95), 0 0 4px rgba(124, 201, 255, 0.35);
   opacity: 0;
   transition: opacity 360ms ease-out;
   z-index: 2200;
@@ -2371,7 +2372,7 @@
   bottom: 28px;
   transform: translateX(-50%);
   pointer-events: none;
-  font-family: var(--nfr-font-display, 'Rajdhani', sans-serif);
+  font-family: var(--nfr-font-display, 'Nunito', sans-serif);
   font-size: 15px;
   font-weight: 600;
   letter-spacing: 0.08em;
@@ -2414,9 +2415,9 @@
   z-index: 2300;
   transition: filter 120ms ease-out, transform 120ms ease-out;
 }
-.nfr-hud-iconbtn:hover { filter: brightness(1.25) drop-shadow(0 0 4px rgba(34, 246, 255, 0.45)); }
+.nfr-hud-iconbtn:hover { filter: brightness(1.25) drop-shadow(0 0 4px rgba(124, 201, 255, 0.45)); }
 .nfr-hud-iconbtn:active { transform: scale(0.94); }
-.nfr-hud-iconbtn:focus-visible { outline: 2px solid var(--nfr-cyan, #22f6ff); outline-offset: 2px; border-radius: 50%; }
+.nfr-hud-iconbtn:focus-visible { outline: 2px solid var(--nfr-cyan, #7cc9ff); outline-offset: 2px; border-radius: 50%; }
 .nfr-hud-mute { right: 12px; }
 .nfr-hud-settings { right: 42px; }
 
@@ -2476,10 +2477,10 @@
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: #a76cff;
+  background: #b98cff;
   border: 1.5px solid rgba(255, 255, 255, 0.9);
   pointer-events: none;
-  box-shadow: 0 0 6px rgba(167, 108, 255, 0.7);
+  box-shadow: 0 0 6px rgba(185, 140, 255, 0.7);
   left: 0;
   top: 0;
   z-index: 500;
@@ -2560,7 +2561,7 @@
   width: 180px;
   height: 180px;
   border-radius: 50%;
-  border: 8px solid #22f6ff;
+  border: 8px solid #7cc9ff;
   pointer-events: none;
   z-index: 901;
   animation: nfr-radial-ring-out 520ms ease-out forwards;
@@ -2593,7 +2594,7 @@
 
 /* ---- Factory worker deposit popup ---- */
 .nfr-worker-deposit-pop {
-  font-family: var(--nfr-font-display, 'Orbitron', sans-serif);
+  font-family: var(--nfr-font-display, 'Quicksand', sans-serif);
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.1em;
@@ -2607,4 +2608,115 @@
   0%   { opacity: 1; transform: translate(calc(-50%), calc(-50%)); }
   20%  { opacity: 1; transform: translate(calc(-50%), calc(-50% - 10px)); }
   100% { opacity: 0; transform: translate(calc(-50%), calc(-50% - 28px)); }
+}
+
+/* ============================================================================
+ * STARFALL GARDEN — "Cozy Candy" override layer.
+ * Appended last so it wins the cascade. Turns the techy chamfered dark-glass
+ * chrome into soft, rounded, bright candy UI for a cute kids-friendly feel.
+ * Kept as an override block (rather than rewriting every rule above) so it's
+ * easy to tune in one place.
+ * ========================================================================== */
+
+/* Kill all the diagonal chamfers — round everything instead. */
+.nfr-panel, .nfr-btn, .nfr-action, .nfr-topright-btn, .nfr-row, .nfr-card,
+.nfr-upgrade, .nfr-upgrade__cost, .nfr-pip, .nfr-toast, .nfr-hpbar,
+.nfr-hpbar__track, .nfr-greed, .nfr-extract-banner, .nfr-summary__stats-card,
+.nfr-summary__loot-card, .nfr-achievement-callout, .nfr-machine-label,
+.nfr-pad-hint, .nfr-pad-zone, .nfr-float-text[data-kind="score"] {
+  clip-path: none !important;
+}
+
+/* Soft rounded twilight-glass panels with a gentle glow halo. */
+.nfr-panel {
+  border-radius: 26px !important;
+  border: 2px solid rgba(255, 255, 255, 0.22) !important;
+  background:
+    radial-gradient(120% 90% at 50% 0%, rgba(124, 201, 255, 0.18), transparent 60%),
+    linear-gradient(160deg, rgba(78, 60, 132, 0.96) 0%, rgba(52, 38, 92, 0.98) 100%) !important;
+  box-shadow: 0 18px 48px rgba(20, 10, 40, 0.5), 0 0 0 6px rgba(255, 255, 255, 0.05) !important;
+}
+.nfr-panel::before, .nfr-panel::after { display: none !important; } /* drop corner brackets */
+.nfr-panel.violet { border-color: rgba(201, 160, 255, 0.6) !important; }
+.nfr-panel.gold   { border-color: rgba(255, 224, 120, 0.6) !important; }
+.nfr-panel.green  { border-color: rgba(150, 245, 190, 0.6) !important; }
+.nfr-panel.red    { border-color: rgba(255, 150, 180, 0.6) !important; }
+.nfr-panel__title { letter-spacing: 0.04em !important; text-transform: none !important; }
+
+/* Candy buttons — bright filled pills with a pressable drop, white text. */
+.nfr-btn, .nfr-action, .nfr-topright-btn {
+  border-radius: 999px !important;
+  border: none !important;
+  color: #fff !important;
+  text-transform: none !important;
+  letter-spacing: 0.03em !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.28) !important;
+  background: linear-gradient(180deg, #7fd0ff 0%, #4aa6ea 100%) !important;
+  box-shadow: 0 5px 0 rgba(40, 90, 140, 0.55), 0 8px 16px rgba(20, 10, 40, 0.28) !important;
+  transition: transform 110ms ease, filter 140ms ease, box-shadow 110ms ease !important;
+}
+.nfr-btn:hover, .nfr-action:hover, .nfr-topright-btn:hover {
+  filter: brightness(1.06) !important;
+  transform: translateY(-2px) !important;
+}
+.nfr-btn:active, .nfr-action:active {
+  transform: translateY(3px) !important;
+  box-shadow: 0 2px 0 rgba(40, 90, 140, 0.55), 0 4px 8px rgba(20, 10, 40, 0.28) !important;
+}
+.nfr-btn.gold, .nfr-action.gold, .nfr-greed {
+  background: linear-gradient(180deg, #ffe27a 0%, #f4b740 100%) !important;
+  color: #6a4a00 !important; text-shadow: 0 1px 1px rgba(255, 255, 255, 0.4) !important;
+  box-shadow: 0 5px 0 rgba(180, 130, 20, 0.5), 0 8px 16px rgba(20, 10, 40, 0.28) !important;
+}
+.nfr-btn.violet, .nfr-action.violet, .nfr-topright-btn {
+  background: linear-gradient(180deg, #cba2ff 0%, #9d6bea 100%) !important;
+  box-shadow: 0 5px 0 rgba(95, 55, 160, 0.5), 0 8px 16px rgba(20, 10, 40, 0.28) !important;
+}
+.nfr-btn.green, .nfr-action.green {
+  background: linear-gradient(180deg, #8bf0b8 0%, #41c987 100%) !important;
+  color: #0c4a2e !important; text-shadow: 0 1px 1px rgba(255, 255, 255, 0.35) !important;
+  box-shadow: 0 5px 0 rgba(40, 150, 95, 0.5), 0 8px 16px rgba(20, 10, 40, 0.28) !important;
+}
+.nfr-btn.red, .nfr-action.red {
+  background: linear-gradient(180deg, #ff9bb4 0%, #f06483 100%) !important;
+  box-shadow: 0 5px 0 rgba(180, 60, 90, 0.5), 0 8px 16px rgba(20, 10, 40, 0.28) !important;
+}
+.nfr-btn::after, .nfr-action::before { display: none !important; }
+
+/* Left action column — chunky candy pills, comfy spacing. */
+.nfr-actioncol { gap: 12px !important; }
+.nfr-action { height: 52px !important; font-size: 15px !important; }
+
+/* Rows / cards / upgrade chips — soft rounded panels on twilight glass. */
+.nfr-row, .nfr-card, .nfr-upgrade {
+  border-radius: 18px !important;
+  border: 2px solid rgba(255, 255, 255, 0.16) !important;
+  background: linear-gradient(180deg, rgba(86, 66, 140, 0.92), rgba(60, 44, 104, 0.95)) !important;
+  box-shadow: 0 8px 20px rgba(20, 10, 40, 0.3) !important;
+}
+.nfr-upgrade__cost {
+  border-radius: 999px !important; border: none !important; color: #6a4a00 !important;
+  background: linear-gradient(180deg, #ffe27a, #f4b740) !important;
+  box-shadow: 0 3px 0 rgba(180, 130, 20, 0.5) !important; text-shadow: none !important;
+}
+.nfr-upgrade__cost.is-disabled {
+  background: linear-gradient(180deg, #b7add0, #9489b4) !important; color: #4a4470 !important;
+  box-shadow: none !important;
+}
+
+/* HUD — rounded, readable on the bright lawn. */
+.nfr-hpbar { border-radius: 999px !important; border: 2px solid rgba(255,255,255,0.3) !important; }
+.nfr-hpbar__track { border-radius: 999px !important; }
+.nfr-hpbar__fill { border-radius: 999px !important; }
+.nfr-pip { border-radius: 999px !important; }
+.nfr-wallet-line { text-shadow: 0 1px 3px rgba(20, 10, 40, 0.65) !important; }
+.nfr-timer__value, .nfr-combo, .nfr-spm { text-shadow: 0 2px 4px rgba(20, 10, 40, 0.6) !important; }
+
+/* Toasts + callouts — rounded soft cards. */
+.nfr-toast { border-radius: 16px !important; }
+.nfr-achievement-callout { border-radius: 18px !important; }
+
+/* Floating world labels (CAULDRON, MOONGATE, etc.) — soft rounded pills. */
+.nfr-machine-label, .nfr-pad-hint, .nfr-pad-zone {
+  border-radius: 999px !important;
 }

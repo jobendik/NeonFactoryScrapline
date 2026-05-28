@@ -1,11 +1,11 @@
 import { Balance } from '../config/Balance';
 import { bus, Events } from '../core/EventBus';
 
-// GreedSystem per blueprint §7.3. Starts ticking the moment the extraction pad
+// GreedSystem per blueprint §7.3. Starts ticking the moment the moongate
 // opens; the multiplier reads off Balance.raid.greedSteps as a step function of
 // seconds-since-open. The multiplier composes on top of combo (which already
-// scales pickup value during the raid): combo is "did you chain kills?" and
-// greed is "did you gamble by staying late?". Both apply at extract time.
+// scales pickup value during the night flight): combo is "did you chain defeats?" and
+// glimmer is "did you gamble by lingering in the garden?". Both apply at the moment you fly home.
 
 export class GreedSystem {
   private elapsed = 0;
@@ -51,7 +51,7 @@ export class GreedSystem {
   }
 
   // Step index 0..N-1 matching Balance.raid.greedSteps and the parallel
-  // Balance.raid.greedEscalation table. 0 = inactive / not yet started.
+  // Balance.raid.greedEscalation table (the glimmer escalation). 0 = inactive / not yet started.
   // M14 systems (WaveDirector escalation, HUD vignette, etc.) read this
   // each frame and apply step-keyed effects.
   getStep(): number {

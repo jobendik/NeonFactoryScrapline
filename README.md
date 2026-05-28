@@ -1,6 +1,8 @@
-# Neon Scrapline: Factory Raid
+# Starfall Garden
 
-Top-down neon extraction auto-shooter with factory progression, raid zones, materials, contracts, and infestation pressure.
+*Bloom. Blast. Enchant.*
+
+A cozy magical top-down auto-shooter with a living potion-garden to grow. Fly out on moonlit night flights to gather stardust, star hearts, and ingredients, then return to build, upgrade, and enchant your garden. Features night glades, ingredients, wishes, and garden-blight pressure.
 
 ## Run
 

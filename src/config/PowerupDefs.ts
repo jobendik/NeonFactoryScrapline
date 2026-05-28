@@ -1,12 +1,12 @@
-// Power-up definitions per blueprint §13. PowerupSystem spawns these on the
-// raid field; activation applies the effect to RaidScene state (some are
-// timed buffs, some are instant). Tutorial raid (M11/M12) spawns only Drone
-// Swarm + Magnet Burst on the §5.4 script.
+// Charm (power-up) definitions per blueprint §13. PowerupSystem spawns these
+// on the flight field; activation applies the effect to RaidScene state (some
+// are timed buffs, some are instant). Tutorial flight (M11/M12) spawns only
+// Firefly Swarm + Stardust Pull on the §5.4 script.
 //
-// TODO(post-launch): Golden Fever (2x scrap drop, 8s) and Turret Drop
-// (auto-fire turret, 12s) from §13 are deferred - the systems they touch
-// (drops, friendly-AI shooter) need their own scoping pass before they're
-// production-ready.
+// TODO(post-launch): Golden Bloom (2x stardust drop, 8s) and Moon Lily
+// (auto-cast flower turret, 12s) from §13 are deferred - the systems they
+// touch (drops, friendly-AI caster) need their own scoping pass before
+// they're production-ready.
 
 export type PowerupKind =
   | 'magnetBurst'
@@ -36,34 +36,34 @@ export interface PowerupDef {
 export const PowerupDefs: Record<PowerupKind, PowerupDef> = {
   magnetBurst: {
     id: 'magnetBurst',
-    label: 'MAGNET BURST',
-    color: 0x22f6ff,
+    label: 'STARDUST PULL',
+    color: 0x7cc9ff,
     durationSec: 5.5,
-    iconText: 'MAG',
+    iconText: 'PULL',
     instant: false,
   },
   signalNuke: {
     id: 'signalNuke',
-    label: 'SIGNAL NUKE',
+    label: 'STAR BURST',
     color: 0xff416b,
     durationSec: 0,
-    iconText: 'NUKE',
+    iconText: 'BURST',
     instant: true,
   },
   droneSwarm: {
     id: 'droneSwarm',
-    label: 'DRONE SWARM',
-    color: 0xa76cff,
+    label: 'FIREFLY SWARM',
+    color: 0xb98cff,
     durationSec: 9.0,
-    iconText: 'CHAIN',
+    iconText: 'SWARM',
     instant: false,
   },
   laserOverdrive: {
     id: 'laserOverdrive',
-    label: 'LASER OVERDRIVE',
+    label: 'SPARK FRENZY',
     color: 0x72ff9f,
     durationSec: 6.0,
-    iconText: 'LASER',
+    iconText: 'SPARK',
     instant: false,
   },
   timeBonus: {
@@ -76,26 +76,26 @@ export const PowerupDefs: Record<PowerupKind, PowerupDef> = {
   },
   shieldBubble: {
     id: 'shieldBubble',
-    label: 'SHIELD BUBBLE',
+    label: 'PETAL SHIELD',
     color: 0xffffff,
     // §13 lists duration as "until used" - we mark it instant since pickup
     // grants a charge on the Player, not a timed effect on the field. The HUD
     // pip renders separately based on Player.shieldCharges.
     durationSec: 0,
-    iconText: 'SHLD',
+    iconText: 'PETAL',
     instant: true,
   },
   freezePulse: {
     id: 'freezePulse',
-    label: 'FREEZE PULSE',
+    label: 'FROST PETALS',
     color: 0xb3e0ff,
     durationSec: 4.0,
-    iconText: 'FRZE',
+    iconText: 'FROST',
     instant: false,
   },
   goldenFever: {
     id: 'goldenFever',
-    label: 'GOLDEN FEVER',
+    label: 'GOLDEN BLOOM',
     color: 0xffd75a,
     durationSec: 8.0,
     iconText: 'GOLD',
@@ -103,10 +103,10 @@ export const PowerupDefs: Record<PowerupKind, PowerupDef> = {
   },
   turretDrop: {
     id: 'turretDrop',
-    label: 'TURRET DROP',
+    label: 'MOON LILY',
     color: 0xff9c3d,
     durationSec: 12.0,
-    iconText: 'TURR',
+    iconText: 'LILY',
     instant: false,
   },
 };

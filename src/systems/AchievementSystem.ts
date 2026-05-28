@@ -30,38 +30,38 @@ export interface AchievementDef {
 export const AchievementDefs: Record<AchievementId, AchievementDef> = {
   'first-extraction': {
     id: 'first-extraction',
-    name: 'FIRST EXTRACTION',
-    description: 'Complete your first extraction.',
+    name: 'FIRST FLIGHT',
+    description: 'Complete your first flight home.',
   },
   'first-core': {
     id: 'first-core',
-    name: 'FIRST CORE',
-    description: 'Collect your first Neon Core.',
+    name: 'FIRST STAR HEART',
+    description: 'Collect your first Star Heart.',
   },
   'ten-raids': {
     id: 'ten-raids',
-    name: '10 RAIDS',
-    description: 'Complete 10 raids.',
+    name: '10 FLIGHTS',
+    description: 'Complete 10 flights.',
   },
   'hundred-raids': {
     id: 'hundred-raids',
-    name: '100 RAIDS',
-    description: 'Complete 100 raids.',
+    name: '100 FLIGHTS',
+    description: 'Complete 100 flights.',
   },
   'no-damage-extract': {
     id: 'no-damage-extract',
     name: 'UNTOUCHED',
-    description: 'Extract without taking damage.',
+    description: 'Fly home without taking damage.',
   },
   'greed-x3-extract': {
     id: 'greed-x3-extract',
-    name: 'GREEDY',
-    description: 'Extract at Greed x3.',
+    name: 'GLIMMERING',
+    description: 'Fly home at Glimmer x3.',
   },
   'first-prestige': {
     id: 'first-prestige',
-    name: 'SYSTEM REBOOT',
-    description: 'Prestige once.',
+    name: 'NEW MOON',
+    description: 'Begin a New Moon once.',
     deferred: true,
   },
   'seven-day-streak': {

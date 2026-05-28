@@ -110,7 +110,7 @@ export class HUDOverlay {
     const scrapIcon = el('span', 'nfr-wallet__icon');
     scrapIcon.innerHTML = SCRAP_ICON;
     const scrapLabel = el('span', 'nfr-wallet__label');
-    scrapLabel.textContent = 'SCRAP';
+    scrapLabel.textContent = 'STARDUST';
     this.scrapValue = el('span');
     this.scrapEl.appendChild(scrapIcon);
     this.scrapEl.appendChild(scrapLabel);
@@ -120,7 +120,7 @@ export class HUDOverlay {
     const coresIcon = el('span', 'nfr-wallet__icon');
     coresIcon.innerHTML = CORE_ICON;
     const coresLabel = el('span', 'nfr-wallet__label');
-    coresLabel.textContent = 'CORES';
+    coresLabel.textContent = 'HEARTS';
     this.coresValue = el('span');
     this.coresEl.appendChild(coresIcon);
     this.coresEl.appendChild(coresLabel);
@@ -210,7 +210,7 @@ export class HUDOverlay {
     }
   }
 
-  setExtract(open: boolean, label = 'EXTRACTION OPEN'): void {
+  setExtract(open: boolean, label = 'MOONGATE OPEN'): void {
     this.extractEl.textContent = open ? label : '';
     this.extractEl.classList.toggle('is-active', open);
   }

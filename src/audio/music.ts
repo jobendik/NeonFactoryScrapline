@@ -1,249 +1,201 @@
-// Adaptive music per blueprint §20.4. Three layers (base / tension / danger)
-// run as continuous synthesized pads with their own gain nodes. Cross-fade
-// is driven by setIntensity({tension, danger}) - typically called by
-// RaidScene each frame based on HP% and Greed step.
+// Music engine — real streamed tracks (no procedural synthesis).
 //
-// Implementation note: each layer is a pair of detuned oscillators (sine +
-// triangle) feeding through a slow tremolo LFO into a per-layer gain.
-// Frequencies and tremolo speeds rise with intensity, so each layer feels
-// progressively more agitated.
+// Loads the Suno-generated mp3 loops, decodes them via Web Audio, and plays
+// them as looping AudioBufferSourceNodes routed through AudioBus.musicBus() so
+// the user volume + mute controls (and platform/ad ducking) apply uniformly.
 //
-// Music output routes through AudioBus.musicBus() so user volume + mute
-// controls apply uniformly.
+// Public API is unchanged from the old synth engine so callers don't change:
+//   startTheme()   — main theme (boot / loading)
+//   startFactory() — garden hub loop
+//   startRaid()    — night-flight: cruise + intense layers, blended by
+//                    setIntensity(tension, danger)
+//   setIntensity() — cross-fades the two flight layers as danger rises
+//   stop()         — fade everything out (idle)
+//
+// Tracks live in public/assets/audio/ and are referenced by URL (kept out of
+// the JS bundle). Files are large-ish mp3s; loops are not sample-accurate
+// gapless, but the crossfades hide the seam well enough for a web game.
 
 import { AudioBus } from './AudioBus';
 
-interface Layer {
-  // Tone-generating nodes - active while the music is running.
-  oscA: OscillatorNode;
-  oscB: OscillatorNode;
-  // Tremolo LFO + amp.
-  lfo: OscillatorNode;
-  lfoGain: GainNode;
-  // Final mix gain. Cross-faded by setIntensity.
-  layerGain: GainNode;
-  targetGain: number;
+type TrackKey = 'theme' | 'hub' | 'flight' | 'flightIntense';
+
+function audioBase(): string {
+  const base = (import.meta as { env?: { BASE_URL?: string } }).env?.BASE_URL ?? '/';
+  return `${base}assets/audio/`;
 }
 
-interface ChordVoice {
-  oscA: OscillatorNode;
-  oscB: OscillatorNode;
-  envGain: GainNode;
+const TRACK_FILES: Record<TrackKey, string> = {
+  theme: 'music-theme.mp3',
+  hub: 'music-hub.mp3',
+  flight: 'music-flight.mp3',
+  flightIntense: 'music-flight-intense.mp3',
+};
+
+interface Voice {
+  key: TrackKey;
+  src: AudioBufferSourceNode;
+  gain: GainNode;
+  target: number;
 }
 
-interface ChordLayerSpec {
-  fundamental: number;
-  octaveShift: number;
-  detuneCents: number;
-  typeA: OscillatorType;
-  typeB: OscillatorType;
-  notesCents: number[];
-}
+type Mode = 'idle' | 'theme' | 'factory' | 'raid';
 
-const FACTORY_LAYER: ChordLayerSpec = {
-  fundamental: 196.0, // G3
-  octaveShift: 0,
-  detuneCents: 5,
-  typeA: 'sine',
-  typeB: 'triangle',
-  notesCents: [0, 700, 1200, 1900], // root, fifth, octave, octave+fifth
-};
-
-const BASE_LAYER: ChordLayerSpec = {
-  fundamental: 174.61, // F3
-  octaveShift: 0,
-  detuneCents: 3,
-  typeA: 'sine',
-  typeB: 'triangle',
-  notesCents: [0, 500, 1200], // power + octave
-};
-
-const TENSION_LAYER: ChordLayerSpec = {
-  fundamental: 207.65, // G#3
-  octaveShift: 0,
-  detuneCents: 8,
-  typeA: 'sawtooth',
-  typeB: 'triangle',
-  notesCents: [0, 600, 900, 1500], // dim-ish
-};
-
-const DANGER_LAYER: ChordLayerSpec = {
-  fundamental: 110.0, // A2
-  octaveShift: 0,
-  detuneCents: 14,
-  typeA: 'sawtooth',
-  typeB: 'square',
-  notesCents: [0, 100, 800], // halftone clash + sixth
-};
-
-type MusicMode = 'idle' | 'raid' | 'factory';
+const FADE_IN = 1.1;
+const FADE_OUT = 0.8;
+const LAYER_RAMP = 0.45;
 
 class MusicEngineImpl {
-  private mode: MusicMode = 'idle';
-  private base: Layer | null = null;
-  private tension: Layer | null = null;
-  private danger: Layer | null = null;
-  // Chord progression scheduler - runs while music is playing.
-  private chordTimer: number | null = null;
-  private chordStep = 0;
+  private mode: Mode = 'idle';
+  private buffers = new Map<TrackKey, AudioBuffer>();
+  private loading = new Map<TrackKey, Promise<AudioBuffer | null>>();
+  private voices: Voice[] = [];
+  // Bumped on every mode change so async loads that resolve late can bail
+  // instead of starting a track the player has already left behind.
+  private gen = 0;
+  // Latest requested flight blend (applied once the layers exist).
+  private intensity = 0;
 
-  startRaid(): void {
-    if (this.mode === 'raid') return;
-    this.stopInternal();
-    if (!AudioBus.musicBus()) return;
-    this.base = this.buildLayer(BASE_LAYER, 0.4, 0.28);
-    this.tension = this.buildLayer(TENSION_LAYER, 1.1, 0);
-    this.danger = this.buildLayer(DANGER_LAYER, 2.2, 0);
-    this.mode = 'raid';
-    this.scheduleChord();
+  startTheme(): void {
+    if (this.mode === 'theme') return;
+    this.mode = 'theme';
+    const g = ++this.gen;
+    this.fadeOutAll();
+    void this.startVoice('theme', 1, g);
   }
 
   startFactory(): void {
     if (this.mode === 'factory') return;
-    this.stopInternal();
-    if (!AudioBus.musicBus()) return;
-    this.base = this.buildLayer(FACTORY_LAYER, 0.3, 0.22);
     this.mode = 'factory';
-    this.scheduleChord();
+    const g = ++this.gen;
+    this.fadeOutAll();
+    void this.startVoice('hub', 1, g);
+  }
+
+  startRaid(): void {
+    if (this.mode === 'raid') return;
+    this.mode = 'raid';
+    this.intensity = 0;
+    const g = ++this.gen;
+    this.fadeOutAll();
+    // Cruise bed always on; intense layer rides in via setIntensity().
+    void this.startVoice('flight', 1, g);
+    void this.startVoice('flightIntense', 0.0001, g);
   }
 
   stop(): void {
-    this.stopInternal();
     this.mode = 'idle';
+    this.gen++;
+    this.fadeOutAll();
   }
 
-  // Drive the cross-fade. Values clamped to [0,1]. Called each frame by
-  // RaidScene as HP/Greed/enemy-count thresholds cross.
+  // Cross-fade the two flight layers. Called每 frame by RaidScene from HP /
+  // glimmer / enemy-count thresholds. Only meaningful in raid mode.
   setIntensity(tension: number, danger: number): void {
     if (this.mode !== 'raid') return;
-    if (this.tension) this.fadeLayer(this.tension, this.clamp01(tension) * 0.34);
-    if (this.danger) this.fadeLayer(this.danger, this.clamp01(danger) * 0.40);
+    const level = clamp01(Math.max(tension * 0.85, danger));
+    this.intensity = level;
+    // Keep a little cruise bed under the intense layer so it never drops out
+    // entirely; the intense layer rises to full as danger peaks.
+    this.setLayerGain('flight', Math.max(0.12, 1 - level * 0.9));
+    this.setLayerGain('flightIntense', level);
   }
 
-  private clamp01(v: number): number {
-    if (v < 0) return 0;
-    if (v > 1) return 1;
-    return v;
+  // ---- internals ----
+
+  private async ensureBuffer(key: TrackKey): Promise<AudioBuffer | null> {
+    const cached = this.buffers.get(key);
+    if (cached) return cached;
+    const inflight = this.loading.get(key);
+    if (inflight) return inflight;
+    const ctx = AudioBus.getCtx();
+    if (!ctx) return null;
+    const url = audioBase() + TRACK_FILES[key];
+    const p = (async (): Promise<AudioBuffer | null> => {
+      try {
+        const res = await fetch(url);
+        if (!res.ok) return null;
+        const data = await res.arrayBuffer();
+        const buf = await ctx.decodeAudioData(data);
+        this.buffers.set(key, buf);
+        return buf;
+      } catch {
+        return null; // missing/unsupported file — stay silent, never crash.
+      } finally {
+        this.loading.delete(key);
+      }
+    })();
+    this.loading.set(key, p);
+    return p;
   }
 
-  // Build one layer: two detuned oscillators -> per-osc gain -> layer gain.
-  // A tremolo LFO modulates the layer gain so the pad has motion.
-  private buildLayer(spec: ChordLayerSpec, tremoloHz: number, initialGain: number): Layer | null {
-    const c = AudioBus.getCtx();
+  private async startVoice(key: TrackKey, target: number, g: number): Promise<void> {
+    const ctx = AudioBus.getCtx();
     const bus = AudioBus.musicBus();
-    if (!c || !bus) return null;
+    if (!ctx || !bus) return;
+    AudioBus.resume();
+    const buffer = await this.ensureBuffer(key);
+    // The player moved on while we were decoding — abort.
+    if (!buffer || g !== this.gen) return;
 
-    const layerGain = c.createGain();
-    layerGain.gain.value = 0.0001;
-    layerGain.connect(bus);
-
-    const oscA = c.createOscillator();
-    const oscB = c.createOscillator();
-    oscA.type = spec.typeA;
-    oscB.type = spec.typeB;
-    oscA.frequency.value = spec.fundamental;
-    oscB.frequency.value = spec.fundamental;
-    oscB.detune.value = spec.detuneCents;
-
-    const oscGain = c.createGain();
-    oscGain.gain.value = 0.0; // silenced until a chord-voice plays
-    oscA.connect(oscGain);
-    oscB.connect(oscGain);
-    oscGain.connect(layerGain);
-
-    // Tremolo LFO
-    const lfo = c.createOscillator();
-    const lfoGain = c.createGain();
-    lfo.type = 'sine';
-    lfo.frequency.value = tremoloHz;
-    lfoGain.gain.value = 0.5;
-    lfo.connect(lfoGain).connect(layerGain.gain);
-
-    const now = c.currentTime;
-    oscA.start(now);
-    oscB.start(now);
-    lfo.start(now);
-
-    const layer: Layer = {
-      oscA,
-      oscB,
-      lfo,
-      lfoGain,
-      layerGain,
-      targetGain: initialGain,
-    };
-    layerGain.gain.cancelScheduledValues(now);
-    layerGain.gain.linearRampToValueAtTime(initialGain, now + 0.6);
-    // Voice the layer's drone gain - pad uses the oscillator-summed gain.
-    oscGain.gain.cancelScheduledValues(now);
-    oscGain.gain.linearRampToValueAtTime(0.18, now + 0.4);
-    return layer;
-  }
-
-  // Simple chord-step generator: every ~3.4s, shift the root by one step in
-  // a slow progression. Keeps the loop from feeling static.
-  private scheduleChord(): void {
-    if (this.chordTimer !== null) window.clearInterval(this.chordTimer);
-    this.chordStep = 0;
-    this.chordTimer = window.setInterval(() => this.nextChord(), 3400);
-  }
-
-  private nextChord(): void {
-    const c = AudioBus.getCtx();
-    if (!c) return;
-    const now = c.currentTime;
-    // Step the root through a small interval pattern (semitones).
-    const steps = [0, -3, -5, -2];
-    this.chordStep = (this.chordStep + 1) % steps.length;
-    const semis = steps[this.chordStep];
-    const detune = semis * 100;
-    for (const layer of [this.base, this.tension, this.danger]) {
-      if (!layer) continue;
-      layer.oscA.detune.cancelScheduledValues(now);
-      layer.oscB.detune.cancelScheduledValues(now);
-      layer.oscA.detune.linearRampToValueAtTime(detune, now + 1.2);
-      layer.oscB.detune.linearRampToValueAtTime(detune + 8, now + 1.2);
-    }
-  }
-
-  private fadeLayer(layer: Layer, target: number): void {
-    const c = AudioBus.getCtx();
-    if (!c) return;
-    if (Math.abs(layer.targetGain - target) < 0.01) return;
-    layer.targetGain = target;
-    const now = c.currentTime;
-    layer.layerGain.gain.cancelScheduledValues(now);
-    layer.layerGain.gain.linearRampToValueAtTime(Math.max(0.0001, target), now + 0.5);
-  }
-
-  private stopInternal(): void {
-    if (this.chordTimer !== null) {
-      window.clearInterval(this.chordTimer);
-      this.chordTimer = null;
-    }
-    const c = AudioBus.getCtx();
-    if (!c) {
-      this.base = this.tension = this.danger = null;
+    const gain = ctx.createGain();
+    gain.gain.value = 0.0001;
+    gain.connect(bus);
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
+    src.loop = true;
+    src.connect(gain);
+    try {
+      src.start();
+    } catch {
       return;
     }
-    const now = c.currentTime;
-    for (const layer of [this.base, this.tension, this.danger]) {
-      if (!layer) continue;
+    const now = ctx.currentTime;
+    gain.gain.cancelScheduledValues(now);
+    gain.gain.linearRampToValueAtTime(Math.max(0.0001, target), now + FADE_IN);
+    this.voices.push({ key, src, gain, target });
+
+    // If this is a flight layer, immediately reconcile with the latest
+    // requested intensity (setIntensity may have fired before we loaded).
+    if (this.mode === 'raid' && (key === 'flight' || key === 'flightIntense')) {
+      this.setIntensity(this.intensity, this.intensity);
+    }
+  }
+
+  private setLayerGain(key: TrackKey, target: number): void {
+    const ctx = AudioBus.getCtx();
+    if (!ctx) return;
+    const voice = this.voices.find(v => v.key === key);
+    if (!voice) return;
+    if (Math.abs(voice.target - target) < 0.01) return;
+    voice.target = target;
+    const now = ctx.currentTime;
+    voice.gain.gain.cancelScheduledValues(now);
+    voice.gain.gain.linearRampToValueAtTime(Math.max(0.0001, target), now + LAYER_RAMP);
+  }
+
+  private fadeOutAll(): void {
+    const ctx = AudioBus.getCtx();
+    const voices = this.voices;
+    this.voices = [];
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    for (const v of voices) {
       try {
-        layer.layerGain.gain.cancelScheduledValues(now);
-        layer.layerGain.gain.linearRampToValueAtTime(0.0001, now + 0.35);
-        layer.oscA.stop(now + 0.45);
-        layer.oscB.stop(now + 0.45);
-        layer.lfo.stop(now + 0.45);
+        v.gain.gain.cancelScheduledValues(now);
+        v.gain.gain.linearRampToValueAtTime(0.0001, now + FADE_OUT);
+        v.src.stop(now + FADE_OUT + 0.1);
       } catch {
-        // already-stopped oscillator throws on stop(); ignore.
+        // already stopped — ignore.
       }
     }
-    this.base = this.tension = this.danger = null;
   }
 }
 
-export const MusicEngine = new MusicEngineImpl();
+function clamp01(v: number): number {
+  if (v < 0) return 0;
+  if (v > 1) return 1;
+  return v;
+}
 
-// Eliminate unused-warning churn - ChordVoice may grow in a later pass.
-export type _ChordVoice = ChordVoice;
+export const MusicEngine = new MusicEngineImpl();

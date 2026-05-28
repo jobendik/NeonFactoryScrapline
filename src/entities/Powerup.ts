@@ -3,7 +3,7 @@ import { Balance } from '../config/Balance';
 import { PowerupDefs, type PowerupKind } from '../config/PowerupDefs';
 import { applyGlow } from '../systems/NeonFX';
 
-// Field-spawned power-up per blueprint §13. Pentagon ring shape, color per
+// Garden-spawned power-up per blueprint §13. Pentagon ring shape, color per
 // def, magnetizes toward the player when in range (same pull profile as
 // Pickup but with a wider radius). Pooled via a Phaser Group on the scene
 // side, like Pickup/Enemy/Bullet.
@@ -128,5 +128,5 @@ export class Powerup extends Phaser.Physics.Arcade.Sprite {
   }
 }
 
-// Read by PowerupSystem so it doesn't accidentally over-shoot the §13 cap.
+// Read by PowerupSystem so it doesn't accidentally over-spawn past the §13 cap.
 export const POWERUP_MAX_ON_FIELD = Balance.powerups.maxOnField;

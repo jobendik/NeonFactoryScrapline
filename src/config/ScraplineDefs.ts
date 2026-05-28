@@ -15,14 +15,14 @@ export interface MaterialDef {
 export const MaterialDefs: Record<MaterialKey, MaterialDef> = {
   alloy: {
     key: 'alloy',
-    label: 'Alloy',
-    shortLabel: 'ALLOY',
+    label: 'Petals',
+    shortLabel: 'PETALS',
     color: '#9cf8ff',
   },
   circuits: {
     key: 'circuits',
-    label: 'Circuits',
-    shortLabel: 'CIRCUITS',
+    label: 'Essence',
+    shortLabel: 'ESSENCE',
     color: '#b5ff7a',
   },
 };
@@ -52,7 +52,7 @@ export const DEFAULT_RAID_ZONE_ID: RaidZoneId = 'scrapFields';
 export const RaidZoneDefs: RaidZoneDef[] = [
   {
     id: 'scrapFields',
-    name: 'Scrap Fields',
+    name: 'Moonlit Meadow',
     tier: 1,
     unlockExtracts: 0,
     material: 'alloy',
@@ -61,11 +61,11 @@ export const RaidZoneDefs: RaidZoneDef[] = [
     threatMult: 1,
     enemyHpMult: 1,
     color: '#38f8ff',
-    description: 'Starter yard. Reliable Alloy for early factory machinery.',
+    description: 'Starter glade. Reliable Petals for early garden growth.',
   },
   {
     id: 'glassDocks',
-    name: 'Glass Docks',
+    name: 'Crystal Pools',
     tier: 2,
     unlockExtracts: 2,
     material: 'alloy',
@@ -74,11 +74,11 @@ export const RaidZoneDefs: RaidZoneDef[] = [
     threatMult: 1.08,
     enemyHpMult: 1.05,
     color: '#45ff93',
-    description: 'Sharper salvage and more pressure. Best early Alloy source.',
+    description: 'Sharper foraging and more pressure. Best early Petal source.',
   },
   {
     id: 'plasmaGrave',
-    name: 'Plasma Grave',
+    name: 'Thornwood',
     tier: 3,
     unlockExtracts: 5,
     material: 'circuits',
@@ -87,11 +87,11 @@ export const RaidZoneDefs: RaidZoneDef[] = [
     threatMult: 1.18,
     enemyHpMult: 1.12,
     color: '#ff43df',
-    description: 'Volatile ruins that feed Circuit-based automation.',
+    description: 'Tangled ruins that yield potion Essence.',
   },
   {
     id: 'quantumLot',
-    name: 'Quantum Lot',
+    name: 'Eclipse Hollow',
     tier: 4,
     unlockExtracts: 10,
     material: 'circuits',
@@ -100,7 +100,7 @@ export const RaidZoneDefs: RaidZoneDef[] = [
     threatMult: 1.32,
     enemyHpMult: 1.25,
     color: '#ffd45c',
-    description: 'Late-launch danger zone with dense Circuit payloads.',
+    description: 'Late-night danger glade with dense Essence.',
   },
 ];
 
@@ -126,48 +126,51 @@ export interface ZoneVisualTheme {
   dustColor: number;
 }
 
+// gradientMid is the FLAT sky base for the night-flight tile (see
+// NeonFX.ensureRaidBackgroundFor). Brightened to a dreamy, kid-friendly
+// twilight rather than a near-black void.
 const DEFAULT_THEME: ZoneVisualTheme = {
-  gradientFrom: '#04111a',
-  gradientMid: '#070718',
-  gradientTo: '#11041c',
-  bloomColor: 'rgba(34, 246, 255, 0.10)',
-  gridColor: 'rgba(34, 246, 255, 0.30)',
-  accentColor: 0x22f6ff,
-  dustColor: 0xa76cff,
+  gradientFrom: '#4a4d92',
+  gradientMid: '#3c3f7e',
+  gradientTo: '#5a4a86',
+  bloomColor: 'rgba(150, 215, 255, 0.16)',
+  gridColor: 'rgba(124, 201, 255, 0.30)',
+  accentColor: 0x9fd0ff,
+  dustColor: 0xc7a6ff,
 };
 
 const ZONE_THEMES: Record<RaidZoneId, ZoneVisualTheme> = {
-  // Tier 1 — starter cyan/teal. Matches the original raid look so returning
-  // players don't get a sudden re-skin on the default zone.
+  // Tier 1 — starter moonlit blue. The default glade, so returning players
+  // don't get a sudden re-skin on the zone they know.
   scrapFields: DEFAULT_THEME,
-  // Tier 2 — coastal jade. Deep teal gradient with green grid for a
-  // "glass refraction over dark water" feel.
+  // Tier 2 — crystal jade. Deep teal gradient with green grid for a
+  // "moonlight refracting through crystal pools" feel.
   glassDocks: {
-    gradientFrom: '#04181a',
-    gradientMid: '#062018',
-    gradientTo: '#04140e',
+    gradientFrom: '#2f7a7e',
+    gradientMid: '#2a6e74',
+    gradientTo: '#246060',
     bloomColor: 'rgba(69, 255, 147, 0.12)',
     gridColor: 'rgba(69, 255, 147, 0.32)',
     accentColor: 0x45ff93,
     dustColor: 0x38f8ff,
   },
-  // Tier 3 — volatile plasma magenta. Violet-to-magenta gradient with hot
-  // pink grid; the dust plane reads red so the arena feels ionized.
+  // Tier 3 — tangled thornwood magenta. Violet-to-magenta gradient with hot
+  // pink grid; the dust plane reads rose so the glade feels enchanted-wild.
   plasmaGrave: {
-    gradientFrom: '#1a0420',
-    gradientMid: '#20062a',
-    gradientTo: '#100214',
+    gradientFrom: '#6a3f80',
+    gradientMid: '#5c3a74',
+    gradientTo: '#4a2e60',
     bloomColor: 'rgba(255, 67, 223, 0.14)',
     gridColor: 'rgba(255, 67, 223, 0.34)',
     accentColor: 0xff43df,
     dustColor: 0xff416b,
   },
-  // Tier 4 — late-game danger gold-over-crimson. Deep amber/crimson base
-  // with gold grid; reads as a high-stakes "endgame" zone.
+  // Tier 4 — late-game eclipse gold-over-rose. Deep amber/rose base
+  // with gold grid; reads as a high-stakes "endgame" glade.
   quantumLot: {
-    gradientFrom: '#1a0a04',
-    gradientMid: '#180c02',
-    gradientTo: '#0c0410',
+    gradientFrom: '#6a5586',
+    gradientMid: '#5c4a7c',
+    gradientTo: '#4a3a68',
     bloomColor: 'rgba(255, 212, 92, 0.14)',
     gridColor: 'rgba(255, 212, 92, 0.34)',
     accentColor: 0xffd45c,

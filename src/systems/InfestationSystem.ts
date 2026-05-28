@@ -1,17 +1,17 @@
 // The differentiator. See blueprint.md §4.
 //
-// On a failed raid, enemies "infest" 1-3 of the player's factory machines,
+// On a failed night flight, shadow weeds "blight" 1-3 of the player's garden devices,
 // disabling their SPM contribution until the player clears them on their
-// next raid by killing infestation-wave enemies.
+// next night flight by defeating blight-wave enemies.
 //
 // Anti-frustration safeguards (§4.4):
-//   - Tutorial raid never infests.
-//   - First 3 failed raids never infest (failsBeforeFirst grace).
-//   - Cap at 50% of total machines (so a single-machine factory can't lose
-//     its only generator).
+//   - Tutorial night flight never blights.
+//   - First 3 failed night flights never blight (failsBeforeFirst grace).
+//   - Cap at 50% of total garden devices (so a single-device garden can't lose
+//     its only moonwell).
 //
 // State lives entirely in saveSystem.get(). InfestationSystem is a thin
-// stateless module that reads/mutates that state. Per-raid cleanse progress
+// stateless module that reads/mutates that state. Per-flight cleanse progress
 // is a transient owned by RaidScene and handed to handleRaidEnd().
 
 import { Balance } from '../config/Balance';
@@ -25,18 +25,18 @@ interface RngLike {
 }
 
 export interface InfestationOutcome {
-  // Number of machines newly marked infested by this raid's outcome.
+  // Number of garden devices newly marked blighted by this flight's outcome.
   newlyInfested: number;
-  // Number of machines restored from cleanse-progress this raid.
+  // Number of garden devices restored from cleanse-progress this flight.
   restored: number;
-  // Whether this raid produced the FIRST infestation event ever for this
+  // Whether this flight produced the FIRST blight event ever for this
   // save (drives the one-time tutorial modal in FactoryScene).
   firstEverInfestation: boolean;
 }
 
-// Total visible / functional machine slots. Currently the FactoryScene only
+// Total visible / functional garden-device slots. Currently the FactoryScene only
 // renders generatorPositions.length slots regardless of gen level, so that
-// IS the upper bound on infestable machines. If gen unlocks more slots later,
+// IS the upper bound on blightable devices. If gen unlocks more slots later,
 // extend Balance.factory.generatorPositions.
 function totalMachineSlots(): number {
   const genLevel = Math.max(1, saveSystem.get().upgrades.gen);
@@ -52,8 +52,8 @@ export const InfestationSystem = {
     return saveSystem.get().infestation.machineIds.length > 0;
   },
 
-  // Fraction of machine slots currently infested. Used by Economy.computeSpm
-  // and the offline-production calc so infested machines contribute nothing.
+  // Fraction of garden-device slots currently blighted. Used by Economy.computeSpm
+  // and the offline-production calc so blighted devices contribute nothing.
   getInfestationRatio(): number {
     const total = totalMachineSlots();
     if (total <= 0) return 0;
@@ -67,10 +67,10 @@ export const InfestationSystem = {
     return totalMachineSlots();
   },
 
-  // Called once per raid end (any outcome, including tutorial). Order:
-  //   1. Apply cleanse from per-raid kills (extracted OR failed).
+  // Called once per flight end (any outcome, including tutorial). Order:
+  //   1. Apply cleanse from per-flight defeats (extracted OR failed).
   //   2. If state is fail/collapse and not tutorial and grace expired,
-  //      add new infested machines (capped).
+  //      add new blighted devices (capped).
   // Persists state immediately - the host (RaidScene.finishRaid) already
   // calls saveSystem.persist() right after.
   handleRaidEnd(opts: {
@@ -85,8 +85,8 @@ export const InfestationSystem = {
     let newlyInfested = 0;
     const wasFirstSeen = !save.infestationTutorialSeen;
 
-    // Cleanse: each killsToRestoreMachine kills clears one machine. Spillover
-    // wraps to the next raid's progress is NOT carried (per spec — clean
+    // Cleanse: each killsToRestoreMachine defeats clears one device. Spillover
+    // wraps to the next flight's progress is NOT carried (per spec — clean
     // boundary is simpler and forgiving enough).
     if (opts.cleanseProgress > 0 && save.infestation.machineIds.length > 0) {
       const machinesToRestore = Math.floor(
@@ -102,13 +102,13 @@ export const InfestationSystem = {
       }
     }
 
-    // Tutorial never infests, never modifies grace counter (blueprint §5.4).
+    // Tutorial never blights, never modifies grace counter (blueprint §5.4).
     if (opts.isTutorial) {
       return { newlyInfested: 0, restored, firstEverInfestation: false };
     }
 
     if (isFail) {
-      // Grace period: first 3 failed raids ignore infestation.
+      // Grace period: first 3 failed night flights ignore blight.
       if (save.infestation.failsBeforeFirst > 0) {
         save.infestation.failsBeforeFirst -= 1;
       } else {
@@ -123,7 +123,7 @@ export const InfestationSystem = {
             : range.min + Math.floor(Math.random() * (range.max - range.min + 1));
           const shieldReduction = (save.refinery.factoryShield1 ?? 0) > 0 ? 1 : 0;
           const want = Math.min(room, Math.max(1, wantRandom - shieldReduction));
-          // Pick `want` indices not already infested.
+          // Pick `want` indices not already blighted.
           const available: number[] = [];
           for (let i = 0; i < total; i++) {
             if (!save.infestation.machineIds.includes(i)) available.push(i);
@@ -154,7 +154,7 @@ export const InfestationSystem = {
   },
 
   // Marks the one-time mechanic modal as seen. Called by FactoryScene after
-  // the player dismisses the modal.
+  // the player dismisses the modal (the garden-blight intro).
   markTutorialSeen(): void {
     saveSystem.get().infestationTutorialSeen = true;
   },

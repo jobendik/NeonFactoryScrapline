@@ -7,8 +7,8 @@ import { todayUtcDate } from '../config/QuestDefs';
 
 function rewardLabel(day: number): string {
   const reward = StreakSystem.rewardForDay(day);
-  if (reward.scrap > 0) return `+${reward.scrap} Scrap`;
-  if (reward.cores > 0) return `+${reward.cores} Core${reward.cores === 1 ? '' : 's'}`;
+  if (reward.scrap > 0) return `+${reward.scrap} Stardust`;
+  if (reward.cores > 0) return `+${reward.cores} Star Heart${reward.cores === 1 ? '' : 's'}`;
   if (reward.cosmetic) return '+1 Shard';
   return Strings.dailyLoginEmpty;
 }

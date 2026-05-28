@@ -41,7 +41,7 @@ export class ParticleEffects {
 
   static ensureTexture(scene: Phaser.Scene): void {
     if (scene.textures.exists(PARTICLE_TEXTURE_KEY)) return;
-    // Soft glow dot so emitters look like neon embers instead of hard pixels.
+    // Soft glow dot so emitters look like magical embers instead of hard pixels.
     const dim = 12;
     const tex = scene.textures.createCanvas(PARTICLE_TEXTURE_KEY, dim, dim);
     if (!tex) return;

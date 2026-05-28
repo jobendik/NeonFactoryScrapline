@@ -250,22 +250,22 @@ export const RetentionSystem = {
 
       // 1. Claimable contract
       if (at.missionsReadyToClaim > 0) {
-        return `${at.missionsReadyToClaim} contract${at.missionsReadyToClaim > 1 ? 's' : ''} ready to claim in Factory.`;
+        return `${at.missionsReadyToClaim} wish${at.missionsReadyToClaim > 1 ? 'es' : ''} ready to claim in your Garden.`;
       }
 
       // 2. Daily quest not yet completed
       if (at.streakTodayClaimable) {
-        return 'Complete your Daily Quest to fill the Chest.';
+        return 'Complete your Daily Quest to fill the Gift.';
       }
 
-      // 3. Operator within reach (≤150% of current cores)
+      // 3. Companion within reach (≤150% of current star hearts)
       if (at.nextOperator) {
         const { cost, cores, id } = at.nextOperator;
         if (cores >= cost) {
-          return `Unlock ${id.charAt(0).toUpperCase() + id.slice(1)} Operator — cores ready.`;
+          return `Unlock ${id.charAt(0).toUpperCase() + id.slice(1)} Companion — hearts ready.`;
         }
         if (cores >= cost * 0.66) {
-          return `${cost - cores} Cores to unlock the next Operator.`;
+          return `${cost - cores} Star Hearts to unlock the next Companion.`;
         }
       }
 

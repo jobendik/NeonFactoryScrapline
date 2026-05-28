@@ -12,6 +12,7 @@ import { MissionBoard } from '../systems/MissionBoard';
 import { RetentionSystem } from '../systems/RetentionSystem';
 import { FunnelTracker } from '../platform/FunnelTracker';
 import { PlayerXpSystem } from '../systems/PlayerXpSystem';
+import { MusicEngine } from '../audio/music';
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -39,7 +40,7 @@ export class BootScene extends Phaser.Scene {
 
       // Offline production per §8.6 - compute against the just-loaded save, bank
       // the result into the wallet immediately so FactoryScene's HUD shows the
-      // boosted total. The "+N Scrap from offline factory" toast pulls from the
+      // boosted total. The "+N stardust from offline garden" toast pulls from the
       // saveSystem's transient slot.
       const offlineScrap = Economy.computeOfflineScrap();
       if (offlineScrap > 0) {
@@ -47,15 +48,15 @@ export class BootScene extends Phaser.Scene {
       }
 
       // M18 — DailyQuestSystem subscribes to gameplay events. Init once at
-      // boot so quest progress accrues even on the first tutorial raid (the
-      // claim panel itself is gated on tutorialDone + first real raid).
+      // boot so quest progress accrues even on the first tutorial night flight (the
+      // claim panel itself is gated on tutorialDone + first real night flight).
       DailyQuestSystem.init();
       // M23 — AchievementSystem subscribes to PLAYER_DAMAGED + PICKUP_COLLECTED
-      // for transient per-raid flags; the per-end audit is driven explicitly
+      // for transient per-night-flight flags; the per-end audit is driven explicitly
       // from RaidScene.finishRaid.
       AchievementSystem.init();
       // Suggestions audit — Mission Board listens to ENEMY_KILLED /
-      // POWERUP_COLLECTED / extract-with-cores events to advance contract
+      // POWERUP_COLLECTED / moongate-with-Star-Hearts events to advance contract
       // progress in real time.
       MissionBoard.init();
       // Retention Phase 1 — PlayerXpSystem subscribes to ENEMY_KILLED and
@@ -63,7 +64,7 @@ export class BootScene extends Phaser.Scene {
       // saveSystem.load() since it reads accountXp from the save.
       PlayerXpSystem.init();
       // Retention pass — run the comeback/payday/streak detection here so
-      // the banner queue is ready before the first FactoryScene render
+      // the banner queue is ready before the first garden render
       // consumes it. MUST run after MissionBoard.init so almostThere() can
       // see claimable contracts on the first frame.
       RetentionSystem.onBoot();
@@ -95,9 +96,14 @@ export class BootScene extends Phaser.Scene {
 
     BootScene.hideHtmlPreload();
 
-    // First-time boot lands directly in the FTUE tutorial raid (§5.1: "no
+    // First-time boot lands directly in the FTUE tutorial night flight (§5.1: "no
     // tutorial modal at start - the game opens directly inside a playable
-    // tutorial raid"). Returning players boot into the Factory hub.
+    // tutorial night flight"). Returning players boot into the magical garden hub.
+    // Main theme over the loading/first-frame moment. It begins as soon as the
+    // browser unlocks audio (first gesture) and cross-fades into whichever
+    // scene's loop starts below.
+    MusicEngine.startTheme();
+
     this.scene.launch('HUDScene');
     if (!saveSystem.get().tutorialDone) {
       this.scene.start('RaidScene', { tutorial: true });

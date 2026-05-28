@@ -1,15 +1,14 @@
 import Phaser from 'phaser';
-import { applyGlow } from '../systems/NeonFX';
 
-// Conveyor — visual-only animated belt segment between two world points.
+// Conveyor — visual-only animated flowing vine segment between two world points (theme: flowing vine).
 // Renders a slate trough with two cyan rails, and scrolls chevron decals
-// along the belt at a fixed speed. Also exposes a `sendCargo()` helper so
-// callers (FactoryScene) can spawn a small chunk traveling end-to-end as
-// visible feedback when a generator drops scrap or a worker delivers.
+// along the vine at a fixed speed. Also exposes a `sendCargo()` helper so
+// callers (the garden scene) can spawn a small chunk traveling end-to-end as
+// visible feedback when a moonwell drops stardust or a pixie delivers.
 //
 // Implementation notes:
-//   - The static belt body is baked into a RenderTexture at construction
-//     time (cheap; one draw call per frame regardless of belt length).
+//   - The static vine body is baked into a RenderTexture at construction
+//     time (cheap; one draw call per frame regardless of vine length).
 //   - The scrolling chevrons are a small pool of sprites moved per frame.
 //   - Cargo is drawn from a shared pool of sprites to avoid GC churn.
 
@@ -20,14 +19,14 @@ export const CONVEYOR_CARGO_KEY = 'conveyor-cargo';
 export type ConveyorTint = 'cyan' | 'gold' | 'violet';
 
 const TINT_COLORS: Record<ConveyorTint, number> = {
-  cyan: 0x22f6ff,
+  cyan: 0x7cc9ff,
   gold: 0xffd75a,
-  violet: 0xa76cff,
+  violet: 0xb98cff,
 };
 
-const BELT_WIDTH = 28;
-const CHEVRON_SPACING = 44;
-const CHEVRON_SPEED_PX_S = 60;
+const BELT_WIDTH = 22;
+const CHEVRON_SPACING = 96;
+const CHEVRON_SPEED_PX_S = 46;
 
 interface CargoSprite {
   sprite: Phaser.GameObjects.Sprite;
@@ -76,14 +75,14 @@ export class Conveyor {
     this.container.setDepth(-3);
     this.container.setRotation(this.angle);
 
-    // Belt body — a horizontal strip rendered at length, height BELT_WIDTH.
+    // Vine body — a horizontal strip rendered at length, height BELT_WIDTH.
     // The texture is a 64×BELT_WIDTH tile (slate base + cyan rails); we stretch
     // its width via a TileSprite so the rails read continuous.
     const beltKey = CONVEYOR_BELT_KEY + '-' + tint;
     const belt = scene.add.tileSprite(0, 0, Math.max(8, this.length), BELT_WIDTH, beltKey);
     belt.setOrigin(0.5, 0.5);
+    belt.setAlpha(0.35); // faint soft trail, not a bright wire
     this.container.add(belt);
-    applyGlow(belt, TINT_COLORS[tint], 4, 0, 0.12);
 
     // Chevron decals — scrolled per frame.
     const chevronKey = CONVEYOR_CHEVRON_KEY + '-' + tint;
@@ -91,6 +90,8 @@ export class Conveyor {
     for (let i = 0; i < chevronCount; i++) {
       const c = scene.add.sprite(0, 0, chevronKey);
       c.setOrigin(0.5, 0.5);
+      c.setScale(0.55);
+      c.setAlpha(0.8);
       this.container.add(c);
       this.chevrons.push(c);
     }
@@ -123,7 +124,7 @@ export class Conveyor {
   }
 
   // Spawn a small cargo chunk traveling from `from` end to `to` end of the
-  // belt over `durationSec`. Optional onArrive fires when it reaches the end.
+  // vine over `durationSec`. Optional onArrive fires when it reaches the end.
   sendCargo(durationSec: number, onArrive?: () => void): void {
     let slot = this.cargoPool.find(c => !c.active);
     if (!slot) {
@@ -179,43 +180,14 @@ export class Conveyor {
     const g = (color >> 8) & 0xff;
     const b = color & 0xff;
 
-    // Slate trough.
-    const grad = ctx.createLinearGradient(0, 0, 0, h);
-    grad.addColorStop(0, '#0e1822');
-    grad.addColorStop(0.5, '#162533');
-    grad.addColorStop(1, '#0a121c');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, w, h);
-
-    // Top + bottom rails.
-    ctx.strokeStyle = `rgba(${r},${g},${b},0.85)`;
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(0, 2);
-    ctx.lineTo(w, 2);
-    ctx.moveTo(0, h - 2);
-    ctx.lineTo(w, h - 2);
-    ctx.stroke();
-
-    // Dim rail glow stripe (just inside the rails).
-    ctx.strokeStyle = `rgba(${r},${g},${b},0.25)`;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(0, 5);
-    ctx.lineTo(w, 5);
-    ctx.moveTo(0, h - 5);
-    ctx.lineTo(w, h - 5);
-    ctx.stroke();
-
-    // Periodic plate joins to read as segmented belt.
-    ctx.strokeStyle = 'rgba(120, 180, 220, 0.18)';
-    ctx.lineWidth = 1;
-    for (let x = 8; x < w; x += 12) {
-      ctx.beginPath();
-      ctx.moveTo(x, 4);
-      ctx.lineTo(x, h - 4);
-      ctx.stroke();
-    }
+    // A soft faint trail of light — barely-there so the garden reads calm.
+    ctx.clearRect(0, 0, w, h);
+    const band = ctx.createLinearGradient(0, 0, 0, h);
+    band.addColorStop(0.0, `rgba(${r},${g},${b},0)`);
+    band.addColorStop(0.5, `rgba(${r},${g},${b},0.42)`);
+    band.addColorStop(1.0, `rgba(${r},${g},${b},0)`);
+    ctx.fillStyle = band;
+    ctx.fillRect(0, h * 0.32, w, h * 0.36);
 
     tex.refresh();
   }
@@ -224,29 +196,33 @@ export class Conveyor {
     const key = CONVEYOR_CHEVRON_KEY + '-' + tint;
     if (scene.textures.exists(key)) return;
     const w = 16;
-    const h = 14;
+    const h = 16;
     const tex = scene.textures.createCanvas(key, w, h);
     if (!tex) return;
     const ctx = tex.context;
     const r = (color >> 16) & 0xff;
     const g = (color >> 8) & 0xff;
     const b = color & 0xff;
-    ctx.strokeStyle = `rgba(${r},${g},${b},0.95)`;
-    ctx.lineWidth = 2.5;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.beginPath();
-    ctx.moveTo(2, 3);
-    ctx.lineTo(w / 2 + 2, h / 2);
-    ctx.lineTo(2, h - 3);
-    ctx.stroke();
-    // Bright inner highlight.
-    ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+    const cx = w / 2;
+    const cy = h / 2;
+
+    // Drifting stardust mote: soft glow + a tiny four-point sparkle. Reads as
+    // motes of stardust flowing along the vine rather than a conveyor arrow.
+    const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, cx);
+    glow.addColorStop(0, 'rgba(255,255,255,0.95)');
+    glow.addColorStop(0.4, `rgba(${r},${g},${b},0.7)`);
+    glow.addColorStop(1, `rgba(${r},${g},${b},0)`);
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
     ctx.lineWidth = 1;
+    ctx.lineCap = 'round';
     ctx.beginPath();
-    ctx.moveTo(2, 3);
-    ctx.lineTo(w / 2 + 2, h / 2);
-    ctx.lineTo(2, h - 3);
+    ctx.moveTo(cx - 5, cy);
+    ctx.lineTo(cx + 5, cy);
+    ctx.moveTo(cx, cy - 5);
+    ctx.lineTo(cx, cy + 5);
     ctx.stroke();
     tex.refresh();
   }
@@ -272,7 +248,7 @@ export class Conveyor {
     ctx.fillStyle = halo;
     ctx.fillRect(0, 0, dim, dim);
 
-    // Crystal chunk.
+    // Moonstone chunk.
     const body = ctx.createLinearGradient(cx - 4, cy - 4, cx + 4, cy + 4);
     body.addColorStop(0, '#ffffff');
     body.addColorStop(0.5, `rgba(${Math.min(255, r + 80)},${Math.min(255, g + 80)},${Math.min(255, b + 80)},1)`);

@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="theme-color" content="#000000" />
-  <title>Neon Scrapline: Factory Raid</title>
+  <meta name="theme-color" content="#160e2e" />
+  <title>Starfall Garden — Bloom. Blast. Enchant.</title>
   <!-- Favicon — prevents browser 404 noise. -->
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='4' fill='%2303060b'/><text x='16' y='23' text-anchor='middle' font-size='20' fill='%2322f6ff'>⚡</text></svg>">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%23160e2e'/><text x='16' y='24' text-anchor='middle' font-size='20'>🌙</text></svg>">
   <!-- CrazyGames SDK v3. Loaded async so it does not block Phaser startup.
        SDKBridge.init() polls briefly for the SDK to appear before falling
        back to stub mode, so production play on CrazyGames still works. -->
@@ -20,9 +20,9 @@
       width: 100%;
       height: 100%;
       background:
-        radial-gradient(ellipse at 25% 25%, rgba(34, 246, 255, 0.05) 0%, transparent 50%),
-        radial-gradient(ellipse at 75% 75%, rgba(167, 108, 255, 0.05) 0%, transparent 50%),
-        #03060b;
+        radial-gradient(ellipse at 25% 25%, rgba(124, 201, 255, 0.05) 0%, transparent 50%),
+        radial-gradient(ellipse at 75% 75%, rgba(185, 140, 255, 0.05) 0%, transparent 50%),
+        #160e2e;
       overflow: hidden;
       touch-action: none;
       user-select: none;
@@ -41,7 +41,7 @@
       display: block;
     }
     /* ==========================================================================
-     * HTML preloader (Cyberpunk Field Terminal). Shown before Phaser scenes
+     * HTML preloader (Starfall Garden — moonlit loading). Shown before Phaser scenes
      * start; faded then removed by BootScene once the asset load + save
      * migration is complete.
      *
@@ -60,17 +60,17 @@
       align-items: center;
       justify-content: center;
       background:
-        radial-gradient(ellipse at center, rgba(34, 246, 255, 0.10) 0%, transparent 60%),
-        radial-gradient(ellipse at 20% 30%, rgba(167, 108, 255, 0.08) 0%, transparent 50%),
+        radial-gradient(ellipse at center, rgba(124, 201, 255, 0.10) 0%, transparent 60%),
+        radial-gradient(ellipse at 20% 30%, rgba(185, 140, 255, 0.08) 0%, transparent 50%),
         radial-gradient(ellipse at 80% 70%, rgba(255, 215, 90, 0.05) 0%, transparent 55%),
-        #03060b;
-      color: #22f6ff;
+        #160e2e;
+      color: #7cc9ff;
       font-family: "JetBrains Mono", "Fira Code", Consolas, monospace;
       z-index: 9999;
       transition: opacity 0.4s ease-out;
       overflow: hidden;
     }
-    /* Diagonal grid parallax — two layers drifting slowly. */
+    /* Drifting starlight lattice — two soft layers crossing slowly. */
     #nfr-preload::before {
       content: "";
       position: absolute;
@@ -81,28 +81,28 @@
           45deg,
           transparent 0,
           transparent 38px,
-          rgba(34, 246, 255, 0.06) 38px,
-          rgba(34, 246, 255, 0.06) 39px
+          rgba(124, 201, 255, 0.06) 38px,
+          rgba(124, 201, 255, 0.06) 39px
         ),
         repeating-linear-gradient(
           -45deg,
           transparent 0,
           transparent 38px,
-          rgba(167, 108, 255, 0.05) 38px,
-          rgba(167, 108, 255, 0.05) 39px
+          rgba(185, 140, 255, 0.05) 38px,
+          rgba(185, 140, 255, 0.05) 39px
         );
       animation: nfr-pre-grid 24s linear infinite;
     }
     #nfr-preload::after {
-      /* Scanlines over everything for retro-CRT read. */
+      /* Faint horizontal light rays over everything for a dreamy read. */
       content: "";
       position: absolute;
       inset: 0;
       pointer-events: none;
       background: repeating-linear-gradient(
         0deg,
-        rgba(34, 246, 255, 0.045) 0,
-        rgba(34, 246, 255, 0.045) 1px,
+        rgba(124, 201, 255, 0.045) 0,
+        rgba(124, 201, 255, 0.045) 1px,
         transparent 1px,
         transparent 3px
       );
@@ -119,32 +119,32 @@
     /* ---- Title (typewriter) ------------------------------------------------ */
     #nfr-preload-title {
       position: relative;
-      font-family: "Orbitron", "JetBrains Mono", monospace;
+      font-family: "Quicksand", "Nunito", system-ui, sans-serif;
       font-size: clamp(28px, 6vw, 56px);
-      font-weight: 800;
+      font-weight: 700;
       letter-spacing: 0.22em;
-      color: #22f6ff;
+      color: #7cc9ff;
       text-shadow:
-        0 0 8px rgba(34, 246, 255, 0.95),
-        0 0 22px rgba(34, 246, 255, 0.65),
-        0 0 44px rgba(34, 246, 255, 0.35),
-        0 0 64px rgba(167, 108, 255, 0.30);
+        0 0 8px rgba(124, 201, 255, 0.95),
+        0 0 22px rgba(124, 201, 255, 0.65),
+        0 0 44px rgba(124, 201, 255, 0.35),
+        0 0 64px rgba(185, 140, 255, 0.30);
       margin: 0 0 10px 0;
       white-space: nowrap;
       overflow: hidden;
       width: 0;
       max-width: 100%;
-      border-right: 2px solid rgba(34, 246, 255, 0.95);
+      border-right: 2px solid rgba(124, 201, 255, 0.95);
       animation:
-        nfr-pre-type 0.56s steps(14, end) forwards,
+        nfr-pre-type 0.6s steps(15, end) forwards,
         nfr-pre-caret 0.85s steps(2, end) infinite;
     }
     @keyframes nfr-pre-type {
       from { width: 0; }
-      to   { width: 14ch; }
+      to   { width: 15ch; }
     }
     @keyframes nfr-pre-caret {
-      0%, 49%   { border-right-color: rgba(34, 246, 255, 0.95); }
+      0%, 49%   { border-right-color: rgba(124, 201, 255, 0.95); }
       50%, 100% { border-right-color: transparent; }
     }
 
@@ -154,7 +154,7 @@
       padding: 0;
       list-style: none;
       font-size: clamp(10px, 1.4vw, 13px);
-      color: rgba(34, 246, 255, 0.78);
+      color: rgba(124, 201, 255, 0.78);
       letter-spacing: 0.20em;
       text-align: left;
       min-width: clamp(240px, 36vw, 360px);
@@ -169,8 +169,8 @@
     }
     .nfr-preload-init li::before {
       content: ">";
-      color: #a76cff;
-      text-shadow: 0 0 6px rgba(167, 108, 255, 0.7);
+      color: #b98cff;
+      text-shadow: 0 0 6px rgba(185, 140, 255, 0.7);
     }
     .nfr-preload-init li:nth-child(1) { animation-delay: 0.62s; }
     .nfr-preload-init li:nth-child(2) { animation-delay: 0.92s; }
@@ -184,11 +184,11 @@
       position: relative;
       width: clamp(240px, 52vw, 440px);
       height: 14px;
-      background: rgba(34, 246, 255, 0.08);
-      border: 1px solid rgba(34, 246, 255, 0.70);
+      background: rgba(124, 201, 255, 0.08);
+      border: 1px solid rgba(124, 201, 255, 0.70);
       box-shadow:
-        inset 0 0 8px rgba(34, 246, 255, 0.18),
-        0 0 14px rgba(34, 246, 255, 0.25);
+        inset 0 0 8px rgba(124, 201, 255, 0.18),
+        0 0 14px rgba(124, 201, 255, 0.25);
       overflow: hidden;
       padding: 2px;
     }
@@ -196,8 +196,8 @@
       position: relative;
       height: 100%;
       width: 0%;
-      background: linear-gradient(90deg, #22f6ff 0%, #6bf9ff 60%, #ffffff 100%);
-      box-shadow: 0 0 14px rgba(34, 246, 255, 0.95);
+      background: linear-gradient(90deg, #7cc9ff 0%, #a6dcff 60%, #ffffff 100%);
+      box-shadow: 0 0 14px rgba(124, 201, 255, 0.95);
       transition: width 0.25s ease-out;
       /* Segmented cells via repeating gradient mask (20 cells across 100%). */
       -webkit-mask-image: repeating-linear-gradient(
@@ -218,7 +218,7 @@
     #nfr-preload-status {
       margin-top: 14px;
       font-size: 11px;
-      color: rgba(34, 246, 255, 0.70);
+      color: rgba(124, 201, 255, 0.70);
       letter-spacing: 0.30em;
       text-transform: uppercase;
     }
@@ -244,18 +244,18 @@
       line-height: 1.5;
     }
     #nfr-preload-recover-btn {
-      background: rgba(34, 246, 255, 0.16);
-      color: #22f6ff;
-      border: 1px solid rgba(34, 246, 255, 0.85);
+      background: rgba(124, 201, 255, 0.16);
+      color: #7cc9ff;
+      border: 1px solid rgba(124, 201, 255, 0.85);
       padding: 8px 22px;
       font-family: inherit;
       font-size: 12px;
       letter-spacing: 0.18em;
       cursor: pointer;
-      text-shadow: 0 0 8px rgba(34, 246, 255, 0.6);
+      text-shadow: 0 0 8px rgba(124, 201, 255, 0.6);
     }
     #nfr-preload-recover-btn:hover {
-      background: rgba(34, 246, 255, 0.28);
+      background: rgba(124, 201, 255, 0.28);
     }
     @media (prefers-reduced-motion: reduce) {
       #nfr-preload::before { animation: none; }
@@ -274,11 +274,11 @@
 </head>
 <body>
   <div id="nfr-preload">
-    <h1 id="nfr-preload-title">NEON SCRAPLINE</h1>
+    <h1 id="nfr-preload-title">STARFALL GARDEN</h1>
     <ul class="nfr-preload-init">
-      <li>BOOTING FIELD TERMINAL</li>
-      <li>LINKING SCRAPLINE FEED</li>
-      <li>CALIBRATING NEON OPTICS</li>
+      <li>WAKING THE GARDEN</li>
+      <li>GATHERING MOONLIGHT</li>
+      <li>SCATTERING STARDUST</li>
     </ul>
     <div id="nfr-preload-bar"><div id="nfr-preload-bar-fill"></div></div>
     <div id="nfr-preload-status">LOADING&hellip;</div>

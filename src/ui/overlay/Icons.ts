@@ -5,9 +5,9 @@
 // drives the rendered hue, so swapping rarity/upgrade color happens by class.
 //
 // The icons are picked to match the gameplay vocabulary:
-//   - cards (Hardy, Quick Feet, Wide Magnet, Vampiric, Pierce, Shield, ...)
-//   - upgrades (Generator, Drone, Speed, Magnet, Damage, Luck)
-//   - currency (Scrap, Cores)
+//   - charms (Hardy Bloom, Swift Wings, Stardust Pull, Lifebloom, Pierce, ...)
+//   - upgrades (Moonwell, Fireflies, Swiftness, Stardust Pull, Spell Power, Luck)
+//   - currency (Stardust, Star Hearts)
 
 // Common SVG attributes — kept consistent so the icons feel like a set.
 const SVG = (body: string): string =>
@@ -64,11 +64,13 @@ export function upgradeIcon(key: string): string {
 }
 
 // Currency icons used by the HUD wallet lines.
+// Stardust — a four-point sparkle.
 export const SCRAP_ICON = SVG(
-  `<path d="M12 3 21 8v8l-9 5-9-5V8z"/><path d="m12 8 5 3-5 3-5-3z"/>`,
+  `<path d="M12 2c.6 4.3 1.9 5.6 6 6.2-4.1.6-5.4 1.9-6 6.2-.6-4.3-1.9-5.6-6-6.2 4.1-.6 5.4-1.9 6-6.2z" fill="currentColor" stroke="none"/><path d="M18.5 15.5c.25 1.7.8 2.2 2.5 2.5-1.7.3-2.25.8-2.5 2.5-.25-1.7-.8-2.2-2.5-2.5 1.7-.3 2.25-.8 2.5-2.5z" fill="currentColor" stroke="none"/>`,
 );
+// Star Heart — a glowing heart.
 export const CORE_ICON = SVG(
-  `<polygon points="12,3 21,8 21,16 12,21 3,16 3,8" /><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/>`,
+  `<path d="M12 20.5S3.5 14.5 3.5 8.8A3.7 3.7 0 0 1 12 7a3.7 3.7 0 0 1 8.5 1.8c0 5.7-8.5 11.7-8.5 11.7z" fill="currentColor" stroke="none"/>`,
 );
 // Generic helpers exposed for ad-hoc icon usage.
 export const ICON_LOCK    = SVG(`<rect x="5" y="11" width="14" height="9" rx="1.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>`);

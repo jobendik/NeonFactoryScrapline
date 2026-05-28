@@ -4,7 +4,7 @@ import { applyGlow } from '../systems/NeonFX';
 
 export const ENEMY_BULLET_TEXTURE_KEY = 'enemy-bullet';
 
-// Bullet entity used for shooter projectiles (and future ability bullets).
+// Spark bolt entity used for shooter spells (and future ability spark bolts).
 // Physics sprite so it travels through the world and the player can dodge it,
 // matching the architecture rule "Shooter projectiles are physics sprites (travel, dodgeable)."
 
@@ -22,7 +22,7 @@ export class Bullet extends Phaser.Physics.Arcade.Sprite {
     scene.physics.add.existing(this);
     this.body_ = this.body as Phaser.Physics.Arcade.Body;
     // 28px texture → center is (14, 14). Body radius 5, offset (9, 9) puts
-    // the hit circle on the projectile's bright core.
+    // the hit circle on the spark bolt's bright core.
     this.body_.setCircle(5, 9, 9);
     this.setActive(false).setVisible(false);
     this.body_.enable = false;

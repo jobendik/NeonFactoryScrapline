@@ -42,11 +42,11 @@ import { QualityManager } from '../systems/QualityManager';
 import {
   ensureCommonFX,
   ensureRaidBackgroundFor,
-  applyGlow,
   raidBgKeyForZone,
   STARFIELD_FAR_KEY,
   STARFIELD_NEAR_KEY,
   VIGNETTE_KEY,
+  MOON_KEY,
 } from '../systems/NeonFX';
 import { AchievementSystem } from '../systems/AchievementSystem';
 import { RetentionSystem } from '../systems/RetentionSystem';
@@ -93,15 +93,16 @@ type RaidPhase = 'active' | 'extracting' | 'ended';
 
 type TutorialCaptionKey = 'move' | 'dash' | 'dashImmune' | 'powerup' | 'extract';
 
-// RaidScene drives the raid lifecycle. Through M6 it owns:
-//   - the player, enemies, pickups, bullets pools
+// RaidScene drives the night-flight lifecycle. Through M6 it owns:
+//   - the player, enemies, pickups, spark-bolt pools
 //   - WaveDirector / WeaponSystem / ParticleEffects / ExtractionSystem
 //   - the combo + run-loot accumulator
 //   - the active->extracting->ended state machine and transition to SummaryScene
 //
 // Combo scales the VALUE of each drop (not the count) per the M5 gate decision:
 // count-scaling explodes pickup population at high combo and hits the maxPickups cap.
-// Greed multiplier (M7) will further scale banked loot on successful extract.
+// Glimmer multiplier (M7) will further scale banked loot when the player flies home
+// through the moongate.
 
 export class RaidScene extends Phaser.Scene {
   private player!: Player;
@@ -123,7 +124,7 @@ export class RaidScene extends Phaser.Scene {
   private phase: RaidPhase = 'active';
   private extractTimer = 0;
   private isTutorial = false;
-  // M19 — explicit raid mode. Drives Rng seeding + post-extract score
+  // M19 — explicit night-flight mode. Drives Rng seeding + post-extract score
   // recording for the daily-seed leaderboard.
   private mode: RaidMode = 'normal';
   private elapsed = 0;
@@ -145,7 +146,7 @@ export class RaidScene extends Phaser.Scene {
   private powerups!: Phaser.GameObjects.Group;
   private powerupSystem!: PowerupSystem;
   // §7.3 visual escalation: a red vignette overlay (HUD-relative) whose
-  // alpha matches the current greed step's vignette factor; an extra cool
+  // alpha matches the current glimmer step's vignette factor; an extra cool
   // tint that fades in at the deep-end (x3) step.
   private greedVignetteEl: HTMLElement | null = null;
   private deepEndTintEl: HTMLElement | null = null;
@@ -158,12 +159,12 @@ export class RaidScene extends Phaser.Scene {
   private nearMissAwarded = new Set<Enemy>();
   // Tracks the integer second of the previous frame so the timer-tick SFX
   // fires exactly once per second during the final 10s rather than every
-  // frame. Set to -1 on raid start to skip the boot frame.
+  // frame. Set to -1 on night-flight start to skip the boot frame.
   private lastTickSecond = -1;
   // Tracks whether we already played extraction-tick this filling window.
   private extractionTickElapsed = 0;
   // M15 — drafted card mods + the system that picks/tracks them. RunMods
-  // starts at defaults each raid; M16 will seed operator-specific values
+  // starts at defaults each night flight; M16 will seed operator-specific values
   // before the first draft window opens.
   private runMods: RunMods = createDefaultRunMods();
   private draftSystem!: DraftSystem;
@@ -171,25 +172,25 @@ export class RaidScene extends Phaser.Scene {
   // Magnet Storm card grants a temporary radius boost; this counts down
   // each frame while > 0. Stacks additively on pick (8s per copy).
   private magnetStormRemaining = 0;
-  // Per-raid Rng. M19 will switch tutorial/normal/daily-seed seeding modes;
+  // Per-night-flight Rng. M19 will switch tutorial/normal/daily-seed seeding modes;
   // for M15 it's just `Date.now()` so DraftSystem has a non-Math.random source.
   private rng!: Rng;
-  // Orbiting drone visuals (cosmetic - the actual gameplay effect is the
-  // bonusWeaponTargets count read by WeaponSystem). Refreshed on raid start
+  // Orbiting firefly visuals (cosmetic - the actual gameplay effect is the
+  // bonusWeaponTargets count read by WeaponSystem). Refreshed on night-flight start
   // and after a Drone Multiplier card pick.
   private operatorOrbs: HTMLElement[] = [];
   private orbAngle = 0;
-  // M17 — kills against 'infested' enemies this raid. Counts toward
-  // restoring infested machines at raid end.
+  // M17 — kills against 'infested' enemies this night flight. Counts toward
+  // restoring infested garden devices at night-flight end.
   private cleanseProgress = 0;
-  // M20 — per-raid single-use flag for the EXTEND RUN ad. REVIVE / DOUBLE
+  // M20 — per-night-flight single-use flag for the EXTEND RUN ad. REVIVE / DOUBLE
   // LOOT competition lives in AdManager (cross-scene flag).
   private extendRunUsed = false;
   // M20 — RaidScene sets this when REVIVE is shown so SummaryScene knows
-  // not to also offer DOUBLE LOOT (§17.3: max 1 rewarded prompt per raid).
+  // not to also offer DOUBLE LOOT (§17.3: max 1 rewarded prompt per night flight).
   private revivePromptShown = false;
   // M20 — async ad flow gate. While a modal is being shown for REVIVE /
-  // EXTEND RUN, the raid is paused; update() guards against re-entry.
+  // EXTEND RUN, the night flight is paused; update() guards against re-entry.
   private adInFlight = false;
   // M21 — spatial grids rebuilt once per frame so WeaponSystem and the
   // pickup-magnet loop run in O(cells visited) instead of O(group size).
@@ -198,12 +199,12 @@ export class RaidScene extends Phaser.Scene {
   private pickupScratch: Pickup[] = [];
   private powerupScratch: Powerup[] = [];
   private powerupGrid = new SpatialGrid<Powerup>();
-  // Turret Drop power-up — when active, a friendly turret sits at the player's
+  // Turret Drop power-up — when active, a friendly moon lily sits at the player's
   // position at activation time and auto-fires on the nearest enemy. We
   // anchor at activation so dropping it as you move feels like placing a
   // sentry rather than a follower.
   private turret: { x: number; y: number; cooldown: number; el: HTMLElement } | null = null;
-  // Retention Phase 1 — per-raid performance stats for the result screen.
+  // Retention Phase 1 — per-night-flight performance stats for the result screen.
   private runKillCount = 0;
   private runDamageDealt = 0;
   private runDamageTaken = 0;
@@ -273,11 +274,11 @@ export class RaidScene extends Phaser.Scene {
     this.cameras.main.setBounds(wb.minX, wb.minY, width, height);
     this.cameras.main.setBackgroundColor(Balance.rendering.backgroundColor);
 
-    // M19 — seed the per-raid Rng based on mode. Daily-seed mode pulls the
+    // M19 — seed the per-night-flight Rng based on mode. Daily-seed mode pulls the
     // dailySeed() so all players today get the same enemy spawns / power-up
     // locations / drops. Tutorial + normal modes seed from Date.now() (still
     // not deterministic across players, but threaded so the same Rng drives
-    // every stochastic call in this raid).
+    // every stochastic call in this night flight).
     const seed = this.mode === 'dailySeed' ? dailySeed() : Date.now();
     this.rng = new Rng(seed);
 
@@ -333,7 +334,7 @@ export class RaidScene extends Phaser.Scene {
         raidDuration,
       });
     } else {
-      // M17 — when the player has any infested machines, the director
+      // M17 — when the player has any infested garden devices, the director
       // periodically spawns red-tinted swarmers. Tutorial bypassed.
       this.waveDirector.start({
         raidDuration,
@@ -388,7 +389,7 @@ export class RaidScene extends Phaser.Scene {
     this.extractTimer = 0;
     this.elapsed = 0;
     this.captionDoneIdx = -1;
-    // Retention Phase 1 — reset per-raid stat trackers.
+    // Retention Phase 1 — reset per-night-flight stat trackers.
     this.runKillCount = 0;
     this.runDamageDealt = 0;
     this.runDamageTaken = 0;
@@ -415,7 +416,7 @@ export class RaidScene extends Phaser.Scene {
     OperatorSystem.applyOperatorMods(this.runMods);
     ResearchSystem.applyToRunMods(this.runMods);
     this.applyDailyModifierToRunMods();
-    // Refinery — Drone Overclock adds +1 starting drone permanently.
+    // Potion cauldron — Drone Overclock adds +1 starting firefly permanently.
     this.runMods.bonusWeaponTargets += RefinerySystem.bonusStartingDrones();
     this.magnetStormRemaining = 0;
     // rng was seeded above (mode-dependent); DraftSystem and all subsystems
@@ -434,8 +435,8 @@ export class RaidScene extends Phaser.Scene {
     bus.on(Events.PLAYER_DASHED, this.onPlayerDashed);
 
     MusicEngine.startRaid();
-    // M20 — bracket the raid with SDK lifecycle calls (§18.3). Tutorial is
-    // still considered "gameplay" per the spec, so we call it on all raids.
+    // M20 — bracket the night flight with SDK lifecycle calls (§18.3). Tutorial is
+    // still considered "gameplay" per the spec, so we call it on all night flights.
     SDKBridge.gameplayStart();
     AdManager.resetForRaid();
     this.extendRunUsed = false;
@@ -471,7 +472,7 @@ export class RaidScene extends Phaser.Scene {
   };
 
   // Spawns one tiny orbit dot per bonusWeaponTargets so the player visually
-  // sees their drone count. Called on raid start and after card picks (Drone
+  // sees their firefly count. Called on night-flight start and after card picks (Drone
   // Multiplier). The orbs are graphics-only — they don't fire themselves;
   // bonusWeaponTargets is what actually feeds WeaponSystem.
   private refreshOperatorOrbs(): void {
@@ -503,7 +504,7 @@ export class RaidScene extends Phaser.Scene {
     }
   }
 
-  // Pauses the raid and launches DraftScene with three rng-drawn cards.
+  // Pauses the night flight and launches DraftScene with three rng-drawn cards.
   // Resume happens in onDraftPicked (or in DraftScene's auto-pick path,
   // which also emits DRAFT_PICKED with a fallback card).
   private beginDraft(draftIndex: number): void {
@@ -534,7 +535,7 @@ export class RaidScene extends Phaser.Scene {
 
     if (this.hitStopTimer > 0) {
       // Hit-stop "weight pause": the scene stays awake (HUD still ticks via
-      // its own update) but raid simulation halts for a frame or two. We
+      // its own update) but night-flight simulation halts for a frame or two. We
       // still tick the timer so timeRemaining stays honest.
       this.hitStopTimer -= dt;
       return;
@@ -748,9 +749,9 @@ export class RaidScene extends Phaser.Scene {
   }
 
   // M20 EXTEND RUN — when the timer hits 0, optionally offer +30s before
-  // finalizing 'collapsed'. Single use per raid; not offered in tutorial;
+  // finalizing 'collapsed'. Single use per night flight; not offered in tutorial;
   // not offered if the player already declined / already accepted (the
-  // extendRunUsed flag blocks repeat offers within the same raid).
+  // extendRunUsed flag blocks repeat offers within the same night flight).
   private async handleTimerExpired(): Promise<void> {
     if (this.phase !== 'active') return;
     if (this.adInFlight) return;
@@ -778,8 +779,8 @@ export class RaidScene extends Phaser.Scene {
   }
 
   // M20 REVIVE — replaces the immediate 'failed' transition when REVIVE
-  // is eligible (§17.2 + §17.3). Eligibility: not tutorial, post-raid-3+,
-  // probabilistic, and no other rewarded prompt already shown this raid.
+  // is eligible (§17.2 + §17.3). Eligibility: not tutorial, post-night-flight-3+,
+  // probabilistic, and no other rewarded prompt already shown this night flight.
   // On accept, restore HP to 60%, grant brief invuln, resume the run.
   private async handlePlayerDied(): Promise<void> {
     if (this.phase !== 'active') return;
@@ -805,7 +806,7 @@ export class RaidScene extends Phaser.Scene {
     });
     this.adInFlight = false;
     if (granted) {
-      // Restore HP, brief invuln, resume the raid.
+      // Restore HP, brief invuln, resume the night flight.
       this.player.reviveToRatio(Balance.ads.reviveHpRatio, Balance.ads.reviveInvulnSec);
       this.scene.resume();
       SDKBridge.gameplayStart();
@@ -818,7 +819,7 @@ export class RaidScene extends Phaser.Scene {
     }
   }
 
-  // Metronome click during the final 10s of a raid. Fires once per integer
+  // Metronome click during the final 10s of a night flight. Fires once per integer
   // second so we don't carpet-bomb the SFX bus at frame rate.
   private tickTimerSfx(): void {
     if (this.timeRemaining > 10) {
@@ -848,8 +849,8 @@ export class RaidScene extends Phaser.Scene {
   }
 
   // Push tension / danger intensity into the music engine per §20.4 rules:
-  //   tension: HP <= 50% OR Greed >= 1.5
-  //   danger:  HP <= 20% OR active enemies >= 10 OR Greed >= 2.0
+  //   tension: HP <= 50% OR Glimmer >= 1.5
+  //   danger:  HP <= 20% OR active enemies >= 10 OR Glimmer >= 2.0
   private tickAdaptiveMusic(): void {
     const hpRatio = this.player.maxHp > 0 ? this.player.hp / this.player.maxHp : 1;
     const greedMult = this.greed.getMultiplier();
@@ -861,7 +862,7 @@ export class RaidScene extends Phaser.Scene {
   }
 
   // Near-miss (M14): any enemy passes within nearMissRadius during a dash
-  // earns +N Scrap and a small popup. Each enemy can only score once per
+  // earns +N stardust and a small popup. Each enemy can only score once per
   // dash; the set clears every frame the player isn't dashing so a brushing
   // pass-through during sustained chase doesn't endlessly fire.
   private tickNearMiss(): void {
@@ -885,7 +886,7 @@ export class RaidScene extends Phaser.Scene {
     }
   }
 
-  // Build the M14 greed-step visuals as HTML/CSS overlays.
+  // Build the M14 glimmer-step visuals as HTML/CSS overlays.
   private buildGreedOverlays(): void {
     this.greedVignetteEl?.remove();
     this.deepEndTintEl?.remove();
@@ -898,7 +899,7 @@ export class RaidScene extends Phaser.Scene {
     nfrUIOverlay.mountHud(this, this.deepEndTintEl);
   }
 
-  // Update the §7.3 visual escalation overlays for the current greed step.
+  // Update the §7.3 visual escalation overlays for the current glimmer step.
   // Reduced-motion players see a flat (non-pulsing) low-intensity vignette
   // and no deep-end tint sweep, per accessibility expectations.
   private updateGreedVisuals(step: number): void {
@@ -1002,8 +1003,8 @@ export class RaidScene extends Phaser.Scene {
 
   // M17 cleanse status read by HUDScene for the top-right counter. Active
   // only when the player has standing infestation. progressInWindow is the
-  // partial-machine kill count toward the next restore; machinesCleared is
-  // already applied THIS raid (not yet persisted).
+  // partial-garden-device kill count toward the next restore; machinesCleared is
+  // already applied THIS night flight (not yet persisted).
   getCleanseInfo(): { active: boolean; progressInWindow: number; perMachine: number; infestedRemaining: number } {
     const total = InfestationSystem.totalSlots();
     const infested = InfestationSystem.getInfestedIndices().length;
@@ -1037,7 +1038,7 @@ export class RaidScene extends Phaser.Scene {
         p.x,
         p.y - 10,
         `+${value}`,
-        type === 'scrap' ? '#22f6ff' : '#ffd75a',
+        type === 'scrap' ? '#7cc9ff' : '#ffd75a',
       );
     }
     if (type === 'core') {
@@ -1049,7 +1050,7 @@ export class RaidScene extends Phaser.Scene {
       }
     } else {
       sfxScrap();
-      // Heal on Pickup card: scrap pickups restore N HP (additive across stacks).
+      // Heal on Pickup card: stardust pickups restore N HP (additive across stacks).
       if (this.runMods.healOnPickup > 0) this.player.heal(this.runMods.healOnPickup);
     }
     p.kill();
@@ -1130,7 +1131,7 @@ export class RaidScene extends Phaser.Scene {
     const ey = enemy.y;
     // Combo scales the VALUE of each pickup (per M5 gate decision); count stays
     // fixed at the §14.3 base so we never blow past Balance.performance.maxPickups.
-    // Golden Fever (§13) doubles the per-drop value while active.
+    // Golden Fever (§13) doubles the per-drop stardust value while active.
     const valuePerDrop = Math.max(
       1,
       Math.round(
@@ -1282,7 +1283,7 @@ export class RaidScene extends Phaser.Scene {
 
     // §15 zones now carry a visual theme — each zone caches its own background
     // tile and shares its accent color with the foreground grid + boundary so
-    // raiding Plasma Grave actually LOOKS different from Scrap Fields.
+    // flying Plasma Grave actually LOOKS different from Scrap Fields.
     const theme = getZoneVisualTheme(this.zone.id);
     const bgKey = raidBgKeyForZone(this.zone.id);
     ensureRaidBackgroundFor(this, bgKey, theme);
@@ -1294,7 +1295,7 @@ export class RaidScene extends Phaser.Scene {
     const layers = QualityManager.parallaxLayers();
 
     // Camera-fixed deepest backdrop — covers the viewport even when the world
-    // is panned to a corner. The raid background tile carries the gradient,
+    // is panned to a corner. The night-flight background tile carries the gradient,
     // soft bloom, and ambient star field.
     const sky = this.add
       .tileSprite(0, 0, camW + 32, camH + 32, bgKey)
@@ -1352,61 +1353,32 @@ export class RaidScene extends Phaser.Scene {
       });
     }
 
-    // Foreground neon grid lines tinted by the zone's accent color — baked
-    // into a RenderTexture so no persistent Graphics objects remain.
-    const step = Balance.ui.gridStep;
-    const rtGrid = this.add.renderTexture(0, 0, worldW, worldH).setOrigin(0, 0).setDepth(-10);
-    const gGrid = this.add.graphics();
-    gGrid.lineStyle(1, theme.accentColor, 0.18);
-    for (let x = wb.minX; x <= wb.maxX; x += step) {
-      gGrid.moveTo(x, wb.minY);
-      gGrid.lineTo(x, wb.maxY);
-    }
-    for (let y = wb.minY; y <= wb.maxY; y += step) {
-      gGrid.moveTo(wb.minX, y);
-      gGrid.lineTo(wb.maxX, y);
-    }
-    gGrid.strokePath();
-    rtGrid.draw(gGrid, -wb.minX, -wb.minY);
-    gGrid.destroy();
-    rtGrid.setPosition(wb.minX, wb.minY);
-    // Bright accent every 4 cells — baked into a second RT.
-    const big = step * 4;
-    const rtAccent = this.add.renderTexture(0, 0, worldW, worldH).setOrigin(0, 0).setDepth(-9);
-    const gAccent = this.add.graphics();
-    gAccent.lineStyle(1.5, theme.accentColor, 0.35);
-    for (let x = wb.minX; x <= wb.maxX; x += big) {
-      gAccent.moveTo(x, wb.minY);
-      gAccent.lineTo(x, wb.maxY);
-    }
-    for (let y = wb.minY; y <= wb.maxY; y += big) {
-      gAccent.moveTo(wb.minX, y);
-      gAccent.lineTo(wb.maxX, y);
-    }
-    gAccent.strokePath();
-    rtAccent.draw(gAccent, -wb.minX, -wb.minY);
-    gAccent.destroy();
-    rtAccent.setPosition(wb.minX, wb.minY);
+    // Big friendly moon hanging in the sky — screen-fixed, drifts gently.
+    const moon = this.add
+      .image(camW * 0.8, camH * 0.2, MOON_KEY)
+      .setScrollFactor(0)
+      .setDepth(-60)
+      .setScale(0.9);
+    this.tweens.add({
+      targets: moon,
+      y: moon.y + 14,
+      duration: 6000,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
 
-    // Glowing arena boundary — baked into RT so it can receive applyGlow.
-    const rtBounds = this.add.renderTexture(0, 0, worldW, worldH).setOrigin(0, 0).setDepth(-8);
-    const gBounds = this.add.graphics();
-    gBounds.lineStyle(3, theme.accentColor, 0.9);
-    gBounds.strokeRect(wb.minX, wb.minY, worldW, worldH);
-    gBounds.lineStyle(1, 0xffffff, 0.45);
-    gBounds.strokeRect(wb.minX + 4, wb.minY + 4, worldW - 8, worldH - 8);
-    rtBounds.draw(gBounds, -wb.minX, -wb.minY);
-    gBounds.destroy();
-    rtBounds.setPosition(wb.minX, wb.minY);
-    applyGlow(rtBounds, theme.accentColor, 6, 0);
+    // Soft rounded garden border — a gentle hedge-line, not a tech frame.
+    const gBounds = this.add.graphics().setDepth(-8);
+    gBounds.lineStyle(7, 0x4fb083, 0.5);
+    gBounds.strokeRoundedRect(wb.minX + 6, wb.minY + 6, worldW - 12, worldH - 12, 48);
 
-    // Screen-fixed vignette overlay so the player's eye is drawn to center.
-    // The greedVignette built later layers ON TOP of this.
+    // Whisper-soft vignette so the bright dreamy sky stays bright.
     const vignette = this.add
       .image(camW / 2, camH / 2, VIGNETTE_KEY)
       .setScrollFactor(0)
       .setDepth(1200)
-      .setAlpha(0.55);
+      .setAlpha(0.22);
     void vignette;
   }
 
@@ -1432,7 +1404,7 @@ export class RaidScene extends Phaser.Scene {
 
     // Brief frame freeze + radial light blast at the player.
     this.spawnRadialFlash();
-    // §20.3 layered extraction success - boom + sweep + sparkle + chord.
+    // §20.3 layered moongate-home success - boom + sweep + sparkle + chord.
     sfxExtractionSuccess();
   }
 
@@ -1460,10 +1432,10 @@ export class RaidScene extends Phaser.Scene {
     this.finishRaid(state, reason);
   }
 
-  // Playbook §7.5 — visible LEAVE RAID button surfaced through the
+  // Playbook §7.5 — visible LEAVE NIGHT FLIGHT button surfaced through the
   // SettingsMenu. Voluntary exit collapses the run (50% unbanked loot, same
   // as timer expiry) and skips the EXTEND RUN ad offer — the player asked
-  // to leave, don't bait them with a continue prompt. Tutorial raids are
+  // to leave, don't bait them with a continue prompt. Tutorial night flights are
   // not exempted: a quitting tutorial player still gets the tutorial-end
   // path so progress flags fire correctly.
   public requestLeaveRaid(): void {
@@ -1482,7 +1454,7 @@ export class RaidScene extends Phaser.Scene {
     this.phase = 'ended';
     // Derive a sensible reason when the caller didn't supply one. Maps the
     // outcome bucket to its dominant cause: extracted → 'extracted',
-    // failed → 'died', collapsed → 'timer'. The voluntary LEAVE RAID path
+    // failed → 'died', collapsed → 'timer'. The voluntary LEAVE NIGHT FLIGHT path
     // overrides 'timer' → 'voluntary' by passing reason explicitly.
     const resolvedReason: RaidEndReason =
       reason ??
@@ -1493,7 +1465,7 @@ export class RaidScene extends Phaser.Scene {
     MusicEngine.stop();
     if (state === 'failed' || state === 'collapsed') sfxRaidFailed();
     // M20 — §18.3 SDK lifecycle: signal good moment on successful extract,
-    // then stop gameplay. Bracket per raid regardless of outcome.
+    // then stop gameplay. Bracket per night flight regardless of outcome.
     if (state === 'extracted') SDKBridge.happytime();
     SDKBridge.gameplayStop();
     Analytics.track(
@@ -1511,12 +1483,12 @@ export class RaidScene extends Phaser.Scene {
         durationSec: Math.round(this.elapsed),
         greedMult: this.greed.getMultiplier(),
         // Playbook §7.3 — finer-grained "why" so the dashboard can split
-        // collapsed-by-timer from collapsed-by-leave-raid without a join.
+        // collapsed-by-timer from collapsed-by-leave-night-flight without a join.
         reason: resolvedReason,
       },
     );
 
-    // Greed multiplies banked loot on successful extract. Death and collapse
+    // Glimmer multiplies banked loot on successful extract. Death and collapse
     // both forfeit 50% of unbanked loot per the prototype rule. Combo is already
     // baked into pickup values at drop time.
     let scrap = this.runLoot.scrap;
@@ -1524,7 +1496,7 @@ export class RaidScene extends Phaser.Scene {
     let greedMult = 1.0;
     let penaltyApplied = false;
     if (state === 'extracted') {
-      // Greed Surge card composes multiplicatively with the greed step.
+      // Greed Surge card composes multiplicatively with the glimmer step.
       greedMult = this.greed.getMultiplier() * this.runMods.greedSurgeMult;
       scrap = Math.round(scrap * greedMult);
       cores = Math.round(cores * greedMult);
@@ -1551,8 +1523,8 @@ export class RaidScene extends Phaser.Scene {
     const newlyUnlockedZones = RaidZoneSystem.syncUnlocks();
 
     // M19 — daily seed leaderboard. Only successful extracts on a daily-seed
-    // raid count; tutorial and normal raids are filtered out. Score is the
-    // banked Scrap (post-greed multiplier).
+    // night flight count; tutorial and normal night flights are filtered out. Score is the
+    // banked stardust (post-glimmer multiplier).
     let dailySeedScore: number | undefined;
     let dailySeedNewBest: boolean | undefined;
     if (this.mode === 'dailySeed' && state === 'extracted') {
@@ -1565,7 +1537,7 @@ export class RaidScene extends Phaser.Scene {
       dailySeedScore = scrap;
       dailySeedNewBest = scrap > prevBest;
     }
-    // Mission Board events — extracted-with-cores, extracted-at-greed.
+    // Mission Board events — extracted-with-Star-Hearts, extracted-at-glimmer.
     if (state === 'extracted') {
       bus.emit('mission:extractedWithCores', { cores });
       bus.emit('mission:extractedAtGreed', { greed: greedMult });
@@ -1584,24 +1556,24 @@ export class RaidScene extends Phaser.Scene {
       rng: this.rng,
     });
 
-    // M20 — consume one-raid OPERATOR TRY-OUT (any outcome). Stamp lastRaidDate
-    // so DAILY CRATE knows the player has raided today.
+    // M20 — consume one-night-flight OPERATOR TRY-OUT (any outcome). Stamp lastRaidDate
+    // so DAILY CRATE knows the player has flown tonight.
     const save = saveSystem.get();
     save.tryOutOperator = null;
     save.lastRaidDate = todayUtcDateForLeaderboard();
 
     // M23 — achievements + season XP per blueprint §10.4 / §16.5. Both run
     // AFTER FtueProgress so raidsCompleted is current; both are no-ops on
-    // tutorial raids.
+    // tutorial night flights.
     if (!this.isTutorial) {
       AchievementSystem.handleRaidEnd({ state, greedMult, tutorial: this.isTutorial });
-      // Retention pass — DOUBLE PAYDAY consumes one raid regardless of
-      // outcome so the rare 2x window can't be camped by aborting raids.
-      // Tutorial raids never count so the FTUE doesn't burn the event.
+      // Retention pass — DOUBLE PAYDAY consumes one night flight regardless of
+      // outcome so the rare 2x window can't be camped by aborting night flights.
+      // Tutorial night flights never count so the FTUE doesn't burn the event.
       RetentionSystem.consumePaydayRaid();
     }
 
-    // Persist immediately on raid-end so the player can't lose loot to a tab
+    // Persist immediately on night-flight-end so the player can't lose loot to a tab
     // close on the summary screen. The 10s autosave and the RAID_ENDED handler
     // both still fire later; this is the belt-and-suspenders save.
     void saveSystem.persist();
@@ -1634,7 +1606,7 @@ export class RaidScene extends Phaser.Scene {
     }
     save2.previousRaidElapsedSec = runStats.elapsedSec;
 
-    // Track personal-best run length (any outcome).
+    // Track personal-best night-flight length (any outcome).
     if (runStats.elapsedSec > save2.stats.bestRaid) {
       save2.stats.bestRaid = runStats.elapsedSec;
     }
@@ -1679,7 +1651,7 @@ export class RaidScene extends Phaser.Scene {
       newlyInfested: infOutcome.newlyInfested,
       machinesRestored: infOutcome.restored,
       // M20 — DOUBLE LOOT vs REVIVE mutex (§17.3). Suppress DOUBLE LOOT
-      // on the summary if REVIVE was already prompted this raid.
+      // on the summary if REVIVE was already prompted this night flight.
       allowDoubleLoot: !this.revivePromptShown,
       zoneId: this.zone.id,
       zoneName: this.zone.name,
@@ -1701,10 +1673,10 @@ export class RaidScene extends Phaser.Scene {
     });
   }
 
-  // Centralizes the §5.3 progressive-reveal rules. Called once per raid-end,
+  // Centralizes the §5.3 progressive-reveal rules. Called once per night-flight-end,
   // before the SummaryScene reads the save. The §5.3 table puts a few unlocks
-  // on the "X raids completed" axis; raidsCompleted counts the tutorial as
-  // raid #1, so the magnet/drone/damage gates compare against >=2/>=3/>=4.
+  // on the "X night flights completed" axis; raidsCompleted counts the tutorial as
+  // night flight #1, so the magnet/firefly/damage gates compare against >=2/>=3/>=4.
   private updateFtueProgress(state: RaidEndState): void {
     const save = saveSystem.get();
     save.raidsCompleted += 1;
@@ -1715,16 +1687,16 @@ export class RaidScene extends Phaser.Scene {
       save.ftueUnlocks.dailyClaim = true;
     }
 
-    // Real-raid count (post-tutorial). Reveal milestones key off this number,
+    // Real-night-flight count (post-tutorial). Reveal milestones key off this number,
     // not raidsCompleted, so a player who never finished the tutorial doesn't
-    // accidentally unlock real-raid gates by failing it.
+    // accidentally unlock real-night-flight gates by failing it.
     const realRaids = save.tutorialDone ? Math.max(0, save.raidsCompleted - 1) : 0;
     if (realRaids >= 1) save.ftueUnlocks.magnetUpgrade = true;
     if (realRaids >= 2) save.ftueUnlocks.droneUpgrade = true;
     if (realRaids >= 3) save.ftueUnlocks.damageUpgrade = true;
     if (realRaids >= 5) save.ftueUnlocks.factoryBoost = true;
-    // Worker (Hauler) is unlocked after the first successful extract so the
-    // player immediately sees automation in their very first factory visit.
+    // Pixie is unlocked after the first successful extract so the
+    // player immediately sees automation in their very first garden visit.
     if (save.successfulExtracts >= 1) save.ftueUnlocks.workerUpgrade = true;
   }
 
@@ -1782,7 +1754,7 @@ export class RaidScene extends Phaser.Scene {
   }
 
   private spawnInitialScrapPile(): void {
-    // §5.2 0.0s: "Big arrow points to nearby scrap pile" - we spawn a small
+    // §5.2 0.0s: "Big arrow points to nearby stardust pile" - we spawn a small
     // visible cluster right next to the player so the player picks it up within
     // the first 2 seconds without needing to chase.
     const offset = Balance.tutorial.initialScrapPileOffset;
@@ -1818,7 +1790,7 @@ export class RaidScene extends Phaser.Scene {
     bus.emit(Events.POWERUP_COLLECTED, kind);
   };
 
-  // Drops a friendly auto-fire turret at (x, y). Active while the
+  // Drops a friendly auto-fire moon lily at (x, y). Active while the
   // turretDrop power-up is. Disposed in tickTurret when the buff ends.
   private placeTurret(x: number, y: number): void {
     if (this.turret) this.turret.el.remove();
@@ -1836,7 +1808,7 @@ export class RaidScene extends Phaser.Scene {
       return;
     }
     const t = this.turret;
-    // Update screen position each frame so the turret tracks camera scroll.
+    // Update screen position each frame so the moon lily tracks camera scroll.
     const cam = this.cameras.main;
     const canvasRect = this.game.canvas.getBoundingClientRect();
     const cssScale = canvasRect.width / this.scale.width;
@@ -1847,7 +1819,7 @@ export class RaidScene extends Phaser.Scene {
     if (t.cooldown > 0) return;
     if (t.cooldown > 0) return;
     // Reuse the WeaponSystem's tracer rendering for visual consistency, but
-    // pick a target from the spatial grid centered on the turret rather than
+    // pick a target from the spatial grid centered on the moon lily rather than
     // the player.
     const range = 320;
     const nearby = this.enemyGrid.queryNearby(t.x, t.y, range, []);
@@ -1896,7 +1868,7 @@ export class RaidScene extends Phaser.Scene {
       if (wasElite) this.hitStopTimer = Math.max(this.hitStopTimer, Balance.raid.hitStopEliteSec);
       else if (wasTank) this.hitStopTimer = Math.max(this.hitStopTimer, Balance.raid.hitStopTankSec);
       // M17 cleanse credit. Each infestation kill counts 1 against the
-      // killsToRestoreMachine threshold.
+      // killsToRestoreMachine threshold (restores one garden device).
       if (wasInfested) this.cleanseProgress += 1;
       // Vampiric (drafted): on kill, chance to heal a small amount.
       if (this.runMods.vampiricChance > 0 && this.rng.next() < this.runMods.vampiricChance) {
@@ -1923,7 +1895,7 @@ export class RaidScene extends Phaser.Scene {
       const nextY = next.y;
       next.applyKnockback(fromX, fromY);
       const nextKilled = next.hit(damage);
-      this.showDamagePopup(nextX, nextY - 16, damage, '#a76cff');
+      this.showDamagePopup(nextX, nextY - 16, damage, '#b98cff');
       if (nextKilled) {
         this.particles.enemyDeath(next.kind, nextX, nextY);
         this.spawnDrops(next);
@@ -2000,7 +1972,7 @@ export class RaidScene extends Phaser.Scene {
     }
   }
 
-  // +15 Seconds: just extends the raid timer. The HUD timer rounds up so the
+  // +15 Seconds: just extends the night-flight timer. The HUD timer rounds up so the
   // bump is visible immediately.
   private activateTimeBonus(): void {
     this.timeRemaining += Balance.powerups.timeBonusSeconds;
@@ -2011,7 +1983,7 @@ export class RaidScene extends Phaser.Scene {
 
   // Priority order: an open extraction pad always wins. Before extraction
   // opens, the tutorial directs the off-screen arrow at the live power-up
-  // (if any). Non-tutorial raids return null until extraction opens.
+  // (if any). Non-tutorial night flights return null until extraction opens.
   getWaypointTarget(): WaypointTarget | null {
     if (this.extraction.isOpen()) {
       const pos = this.extraction.getPadPosition();

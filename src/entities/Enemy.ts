@@ -32,8 +32,8 @@ export interface EnemyFireRequest {
   dirY: number;
 }
 
-// Bomber explosion request — emitted from tick() when the bomber's telegraph
-// elapses. RaidScene handles damage application + visual.
+// Bomber burst request — emitted from tick() when the bomber's telegraph
+// elapses. The night-flight scene handles damage application + visual.
 export interface EnemyExplosionRequest {
   x: number;
   y: number;
@@ -55,7 +55,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   private speed = 0;
   private body_!: Phaser.Physics.Arcade.Body;
 
-  // Shooter state. Unused for chasers but kept on every Enemy because the pool
+  // Shooter state. Unused for chasers but kept on every shadow moth because the pool
   // recycles instances - a pooled grunt may be re-spawned as a shooter later.
   private fireCooldown = 0;
   private telegraphLeft = 0;
@@ -65,11 +65,11 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   // Knockback (M14). While > 0, the chaser tick is suppressed and the physics
   // body holds the externally-set velocity from applyKnockback().
   private knockbackTimer = 0;
-  // M17 glitch jitter (infested-only). Drives a sub-degree rotation wobble
-  // so the sprite reads as "corrupted" without affecting the body.
+  // M17 curse jitter (cursed-bloom-only). Drives a sub-degree rotation wobble
+  // so the sprite reads as "cursed" without affecting the body.
   private glitchPhase = 0;
-  // M19 — per-raid Rng reference; supplied at spawn time. Drives the
-  // shooter fire-cooldown rolls so daily-seed raids are reproducible.
+  // M19 — per-flight Rng reference; supplied at spawn time. Drives the
+  // shooter fire-cooldown rolls so daily-seed night flights are reproducible.
   private rng: Rng | null = null;
   // Bomber: charge phase until in range, then expanding-ring telegraph.
   private bomberTelegraphLeft = 0;
@@ -78,7 +78,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   // to chase the reward.
   private lifetimeLeft = 0;
   // Damage-reduction buff applied to this enemy by nearby Shield Carriers;
-  // 0 = unbuffed, 1 = invulnerable. RaidScene updates this each frame.
+  // 0 = unbuffed, 1 = invulnerable. The night-flight scene updates this each frame.
   buffedDamageReduction = 0;
   // Tracks whether the preFX glow has been wired up for the current kind so
   // pool recycling doesn't re-add a duplicate filter every spawn.
@@ -160,7 +160,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     if (!this.active) return { fired: null };
     if (frozen) {
       // Freeze Pulse (§13): enemies fully halt - no movement, no fire, no
-      // telegraph charge-up. Visual tint is applied by RaidScene.
+      // telegraph charge-up. Visual tint is applied by the night-flight scene.
       this.body_.setVelocity(0, 0);
       return { fired: null };
     }
@@ -181,7 +181,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       return this.tickFleeing(dt, playerX, playerY);
     }
     // buffer + extractJammer share chaser movement; the buff/jamming aura
-    // is read by RaidScene each frame from the active enemy list.
+    // is read by the night-flight scene each frame from the active enemy list.
     this.tickChaser(playerX, playerY);
     if (this.kind === 'infested') {
       this.glitchPhase += dt * Balance.infestation.glitchHz;
@@ -193,7 +193,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
 
   // Bomber behavior: charge toward player at increased speed; once within
   // explosionRadius, lock in place and play a 0.5s expanding-ring telegraph.
-  // When the telegraph elapses, emit an explosion request and self-kill.
+  // When the telegraph elapses, emit a burst request and self-kill.
   private tickBomber(dt: number, playerX: number, playerY: number): EnemyTickResult {
     const cfg = Balance.enemies.bomber;
     const dx = playerX - this.x;
@@ -257,7 +257,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   }
 
   // Bomber telegraph: expanding red ring that grows from 0 → explosionRadius
-  // as telegraph elapses, so the player can see exactly where the AoE lands.
+  // as telegraph elapses, so the player can see exactly where the burst lands.
   private drawBomberTelegraph(totalSec: number, maxRadius: number): void {
     if (!this.bomberTelegraphGfx) {
       this.bomberTelegraphGfx = this.scene.add.graphics();
@@ -277,8 +277,8 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     if (this.bomberTelegraphGfx) this.bomberTelegraphGfx.clear();
   }
 
-  // Push the enemy away from (fromX, fromY) for knockbackDurSec. RaidScene
-  // calls this on player-bullet hits. Tanks get a smaller impulse so they
+  // Push the enemy away from (fromX, fromY) for knockbackDurSec. The night-flight
+  // scene calls this on player spark-bolt hits. Tanks get a smaller impulse so they
   // still feel heavy.
   applyKnockback(fromX: number, fromY: number): void {
     if (!this.active) return;
@@ -399,7 +399,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     };
 
     // 1) Glow halo behind every enemy — gives the procedurally-drawn shape
-    //    that neon "lit from within" read without depending on preFX glow.
+    //    that magical "lit from within" read without depending on preFX glow.
     const halo = ctx.createRadialGradient(cx, cy, r * 0.6, cx, cy, r * 1.65);
     halo.addColorStop(0, haloRgba(0.55));
     halo.addColorStop(0.55, haloRgba(0.22));
@@ -494,7 +494,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       ctx.closePath();
       ctx.fill();
     } else if (spec.shape === 'triangle') {
-      // Forward-pointing thruster glow + eye slit.
+      // Forward-pointing wing glow + eye slit.
       const eye = ctx.createRadialGradient(cx + r * 0.2, cy, 0, cx + r * 0.2, cy, r * 0.35);
       eye.addColorStop(0, 'rgba(255,255,255,1)');
       eye.addColorStop(1, haloRgba(0));
@@ -503,7 +503,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       ctx.arc(cx + r * 0.2, cy, r * 0.35, 0, Math.PI * 2);
       ctx.fill();
     } else if (spec.shape === 'pentagon') {
-      // Shooter — central optic + side panels.
+      // Shooter — central eye + side petals.
       ctx.fillStyle = 'rgba(255,255,255,0.95)';
       ctx.beginPath();
       ctx.arc(cx, cy, r * 0.28, 0, Math.PI * 2);
@@ -570,6 +570,35 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       ctx.fillStyle = core;
       ctx.beginPath();
       ctx.arc(cx, cy, inner, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Cute face — big friendly eyes + rosy cheeks so every foe reads as an
+    // adorable little creature (a sleepy shadow critter) rather than an
+    // abstract shape. This is the main "kids-friendly" lever for the raid.
+    const eyeR = Math.max(3.5, r * 0.22);
+    const eyeDX = r * 0.36;
+    const eyeY = cy - r * 0.06;
+    // rosy cheeks first (under the eyes)
+    ctx.fillStyle = 'rgba(255, 140, 175, 0.55)';
+    for (const sx of [-1, 1]) {
+      ctx.beginPath();
+      ctx.arc(cx + sx * (eyeDX + eyeR * 0.4), eyeY + eyeR * 0.9, eyeR * 0.55, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    for (const sx of [-1, 1]) {
+      const ex = cx + sx * eyeDX;
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(ex, eyeY, eyeR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#2a1840';
+      ctx.beginPath();
+      ctx.arc(ex + sx * eyeR * 0.18, eyeY + eyeR * 0.14, eyeR * 0.55, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.95)';
+      ctx.beginPath();
+      ctx.arc(ex - eyeR * 0.28, eyeY - eyeR * 0.3, eyeR * 0.26, 0, Math.PI * 2);
       ctx.fill();
     }
 

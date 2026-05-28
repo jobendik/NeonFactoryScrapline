@@ -1,4 +1,6 @@
-# Neon Factory Raid — Master Blueprint
+# Starfall Garden — Master Blueprint
+
+> Note: this design doc was originally authored for the "Neon Factory Raid" theme. The shipped game has been fully re-themed to **Starfall Garden** (cozy magical night-flight + potion garden). Mechanics described here are intact; read factory→garden, scrap→stardust, cores→star hearts, drones→fireflies, raids→night flights, etc.
 
 > **Single source of truth** for design, implementation, content, balance, monetization, and launch. Written so an AI or developer can read this document end-to-end and build the production version of the game without further clarification.
 
@@ -46,7 +48,7 @@
 
 ### 1.1 One-sentence pitch
 
-> **Build a neon factory, raid the grid for cores, extract before collapse — or lose what you built.**
+> **Grow a magical garden, fly the night for star hearts, reach the moongate before dawn — or lose what you bloomed.**
 
 ### 1.2 Genre
 
@@ -1040,12 +1042,12 @@ Background must NEVER compete with foreground for attention. Saturation < 30% on
 
 The CrazyGames thumbnail is the single most important visual asset. Composition:
 
-- Center-left: Cyan player ship collecting glowing scrap
-- Center-right: Red enemy swarm in motion
-- Background: Neon factory machines
-- Upper-right: Green extraction beam
-- Lower-center: Yellow loot burst
-- Title text: "NEON FACTORY RAID" — bold sans-serif, cyan glow
+- Center-left: Moonlit glider gathering glowing stardust
+- Center-right: Shadow-moth swarm in motion
+- Background: Enchanted night garden under falling stars
+- Upper-right: Green moongate beam
+- Lower-center: Golden star-heart burst
+- Title text: "STARFALL GARDEN" — soft rounded font, moon-blue/gold glow
 
 Must be readable at 200×120 px (CrazyGames grid view).
 

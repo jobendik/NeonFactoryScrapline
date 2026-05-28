@@ -1,14 +1,14 @@
 import Phaser from 'phaser';
 import { applyGlow } from '../systems/NeonFX';
 
-// OreDeposit — a static, decorative ore vein on the factory floor. Represents
-// the raw material that generators "process" into Scrap. Visual only: shimmers,
+// OreDeposit — a static, decorative moonstone bed on the garden floor. Represents
+// the raw material that moonwells "process" into stardust. Visual only: shimmers,
 // occasionally puffs a glint particle, and pulses with a soft cyan/violet halo.
 //
-// Each ore deposit is paired (in FactoryScene) with a conveyor belt that
-// transports ore from the deposit into a generator. The deposit itself does
+// Each moonstone bed is paired (in the garden scene) with a flowing vine that
+// carries moonstone from the bed into a moonwell. The bed itself does
 // not produce gameplay state — the visual just sells the fiction that the
-// factory has a feedstock.
+// garden has a feedstock.
 
 export const ORE_DEPOSIT_TEXTURE_KEY = 'ore-deposit';
 export const ORE_SHARD_TEXTURE_KEY = 'ore-shard';
@@ -16,8 +16,8 @@ export const ORE_SHARD_TEXTURE_KEY = 'ore-shard';
 export type OreTint = 'cyan' | 'violet' | 'gold';
 
 const TINT_COLORS: Record<OreTint, number> = {
-  cyan: 0x22f6ff,
-  violet: 0xa76cff,
+  cyan: 0x7cc9ff,
+  violet: 0xb98cff,
   gold: 0xffd75a,
 };
 
@@ -37,7 +37,7 @@ export class OreDeposit {
     this.tint = tint;
     const colorNum = TINT_COLORS[tint];
 
-    // Soft halo underneath the ore to make it read as "lit from within".
+    // Soft halo underneath the moonstone to make it read as "lit from within".
     this.haloSprite = scene.add.sprite(x, y, ORE_DEPOSIT_TEXTURE_KEY + '-halo-' + tint);
     this.haloSprite.setDepth(0);
     this.haloSprite.setAlpha(0.55);
@@ -46,7 +46,7 @@ export class OreDeposit {
     this.sprite.setDepth(1);
     applyGlow(this.sprite, colorNum, 6, 0, 0.18);
 
-    // Subtle shimmer particles — small sparkles drifting upward off the shards.
+    // Subtle shimmer particles — small sparkles drifting upward off the crystals.
     this.shimmer = scene.add.particles(x, y - 4, ORE_SHARD_TEXTURE_KEY, {
       speed: { min: 8, max: 26 },
       angle: { min: 250, max: 290 },
@@ -59,7 +59,7 @@ export class OreDeposit {
     this.shimmer.setDepth(2);
   }
 
-  // Per-frame: subtle scale pulse on the halo so the ore looks alive.
+  // Per-frame: subtle scale pulse on the halo so the moonstone looks alive.
   update(dt: number): void {
     this.pulseTimer += dt;
     const scale = 1 + Math.sin(this.pulseTimer * 1.8) * 0.08;
@@ -101,7 +101,7 @@ export class OreDeposit {
     }
   }
 
-  // Big radial halo behind the ore.
+  // Big radial halo behind the moonstone.
   private static ensureHaloTexture(scene: Phaser.Scene, tint: OreTint, color: number): void {
     const key = ORE_DEPOSIT_TEXTURE_KEY + '-halo-' + tint;
     if (scene.textures.exists(key)) return;
