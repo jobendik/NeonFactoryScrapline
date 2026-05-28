@@ -438,19 +438,41 @@ export const Balance = {
   },
   factory: {
     backgroundColor: '#04080c',
+    // 8 generator slots in a 2-column staggered grid on the left third of the
+    // factory floor. Each row's pair of generators is fed by an ore deposit
+    // sitting further west (see oreDepositPositions) via a conveyor. The
+    // first slot is always visible (Gen Lv. 1); subsequent levels reveal one
+    // more slot each, giving the factory a visible "expand" beat.
     generatorPositions: [
-      { x: -380, y: -120 },
+      { x: -380, y: -100 },
       { x: -380, y: 140 },
+      { x: -380, y: -340 },
+      { x: -380, y: 380 },
+      { x: -540, y:  -100 },
+      { x: -540, y:  140 },
+      { x: -540, y: -340 },
+      { x: -540, y: 380 },
     ] as const,
-    deployPad: { x: 460, y: 0, radius: 70, holdSec: 0.4 },
+    // Ore deposit positions — clustered along the far-left wall. Each pair
+    // of generator rows is fed by one ore vein. Tints cycle so each vein
+    // reads as a distinct "vein of crystal".
+    oreDepositPositions: [
+      { x: -710, y: -100, tint: 'cyan'   as const },
+      { x: -710, y:  140, tint: 'violet' as const },
+      { x: -710, y: -340, tint: 'gold'   as const },
+      { x: -710, y:  380, tint: 'cyan'   as const },
+    ] as const,
+    // Central refinery building. The worker deposit point sits on the
+    // funnel of this structure so deliveries visually feed the smelter.
+    smelter: { x: -100, y: 10 },
+    deployPad: { x: 540, y: 0, radius: 70, holdSec: 0.4 },
     generatorSize: 64,
     generatorDropOffsetMin: 36,
     generatorDropOffsetMax: 80,
     generatorPulseHz: 0.9,
-    // Deposit point where factory workers drop off collected scrap.
-    // World coordinates: (0,0) is world centre; negative x is the left
-    // side of the factory, toward the generators at (-380, ±130).
-    workerDepositPoint: { x: -140, y: 10 },
+    // Deposit point where factory workers drop off collected scrap. Sits
+    // on the smelter's intake funnel for a clean visual handoff.
+    workerDepositPoint: { x: -100, y: 18 },
   },
   // Autonomous factory workers ("Haulers"). All tuning lives here.
   workers: {

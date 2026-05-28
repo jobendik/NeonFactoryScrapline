@@ -3,6 +3,9 @@ import { Player } from '../entities/Player';
 import { Pickup, type PickupType } from '../entities/Pickup';
 import { Generator } from '../entities/Machine';
 import { Drone } from '../entities/Drone';
+import { OreDeposit } from '../entities/OreDeposit';
+import { Conveyor, type ConveyorTint } from '../entities/Conveyor';
+import { Smelter } from '../entities/Smelter';
 import { InputSystem } from '../systems/InputSystem';
 import { Economy } from '../systems/EconomySystem';
 import { UpgradeEffects } from '../systems/UpgradeSystem';
@@ -71,6 +74,21 @@ export class FactoryScene extends Phaser.Scene {
   private inputSystem!: InputSystem;
   private pickups!: Phaser.GameObjects.Group;
   private generators: Generator[] = [];
+  // Decorative ore veins feeding each generator pair. Visual only — pulse and
+  // shimmer per frame. Rebuilt when the player upgrades Gen so the active
+  // ore veins match the number of active generators.
+  private oreDeposits: OreDeposit[] = [];
+  // Animated conveyor belts: ore → generator (cosmetic feedstock) and
+  // generator → smelter (visible feedback path when a generator produces).
+  // Indexed by generator slot so we can trigger per-generator cargo bursts
+  // from spawnScrapAt().
+  private feedConveyors: Conveyor[] = [];        // ore → generator (parallel to generators[])
+  private outboundConveyors: Conveyor[] = [];    // generator → smelter (parallel to generators[])
+  // Cross-belt running along the right side of the smelter toward the
+  // deploy pad — purely decorative "shipping line" so the deploy pad reads
+  // as the factory's output.
+  private shippingConveyor: Conveyor | null = null;
+  private smelter: Smelter | null = null;
 
   private padX = Balance.factory.deployPad.x;
   private padY = Balance.factory.deployPad.y;
@@ -161,7 +179,12 @@ export class FactoryScene extends Phaser.Scene {
     });
     this.physics.add.overlap(this.player, this.pickups, this.onPickupOverlap, undefined, this);
 
+    this.spawnSmelter();
     this.spawnGenerators();
+    this.spawnOreAndConveyors();
+    this.spawnShippingConveyor();
+    this.spawnFactoryLabels();
+    this.spawnDeployPadFX();
     this.spawnMilestoneVisuals();
     this.spawnDrones();
     this.spawnWorkers();
@@ -257,6 +280,33 @@ export class FactoryScene extends Phaser.Scene {
 
     for (const drone of this.drones) drone.update(dt, this.player.x, this.player.y);
 
+    // Ore + conveyor + smelter ticks. Each is visual-only and very cheap
+    // (sin/cos pulse + a handful of sprite positions). Conveyor instances
+    // are deduped because multiple generators may reference the same belt.
+    for (const ore of this.oreDeposits) ore.update(dt);
+    const seenBelts = new Set<Conveyor>();
+    for (const belt of this.feedConveyors) {
+      if (seenBelts.has(belt)) continue;
+      seenBelts.add(belt);
+      belt.update(dt);
+    }
+    for (const belt of this.outboundConveyors) {
+      if (seenBelts.has(belt)) continue;
+      seenBelts.add(belt);
+      belt.update(dt);
+    }
+    if (this.shippingConveyor) {
+      this.shippingConveyor.update(dt);
+      // Trickle of decorative shipping cargo every ~1.6s while there's any
+      // active generation. Keeps the deploy line visibly moving.
+      this.shippingCargoTimer -= dt;
+      if (this.shippingCargoTimer <= 0 && this.generators.length > 0) {
+        this.shippingConveyor.sendCargo(2.2);
+        this.shippingCargoTimer = 1.6;
+      }
+    }
+    this.smelter?.update(dt);
+
     WorkerSystem.update(dt, this.pickups);
 
     const baseRadius = UpgradeEffects.magnetRadius();
@@ -310,6 +360,13 @@ export class FactoryScene extends Phaser.Scene {
     this.inputSystem.destroy();
     for (const gen of this.generators) gen.destroy();
     this.generators = [];
+    for (const ore of this.oreDeposits) ore.destroy();
+    this.oreDeposits = [];
+    this.destroyConveyors();
+    this.shippingConveyor?.destroy();
+    this.shippingConveyor = null;
+    this.smelter?.destroy();
+    this.smelter = null;
     for (const drone of this.drones) drone.destroy();
     this.drones = [];
     WorkerSystem.destroy();
@@ -370,11 +427,215 @@ export class FactoryScene extends Phaser.Scene {
     }
   }
 
+  private spawnSmelter(): void {
+    const s = Balance.factory.smelter;
+    this.smelter = new Smelter(this, s.x, s.y);
+  }
+
+  // Pin a few decorative labels along the floor so the spatial story reads
+  // at a glance: ore enters from the west, refines at the centre, ships
+  // from the deploy pad on the east. World-pinned HTML so they share the
+  // glow palette of every other label in the game.
+  private spawnFactoryLabels(): void {
+    const wb = Balance.player.worldBounds;
+    const sm = Balance.factory.smelter;
+
+    const oreLabel = nfrEl('div', 'nfr-machine-label gold');
+    oreLabel.textContent = '◆ RAW ORE ◆';
+    this.pinHtmlToWorld(oreLabel, wb.minX + 170, wb.minY + 60);
+
+    const smelterLabel = nfrEl('div', 'nfr-machine-label cyan');
+    smelterLabel.textContent = '◆ SMELTER ◆';
+    this.pinHtmlToWorld(smelterLabel, sm.x, sm.y - 90);
+
+    const shipLabel = nfrEl('div', 'nfr-machine-label cyan');
+    shipLabel.style.color = 'var(--nfr-green, #72ff9f)';
+    shipLabel.style.textShadow = '0 0 8px rgba(114, 255, 159, 0.55), 0 1px 3px rgba(0, 0, 0, 0.95)';
+    shipLabel.textContent = '◆ SHIPPING ◆';
+    this.pinHtmlToWorld(shipLabel, this.padX, wb.minY + 60);
+  }
+
+  // Persistent ambient particles around the deploy pad so it reads as a
+  // live launch portal rather than a static circle on the floor. Two
+  // emitters: rising motes inside the ring and an outer halo that breathes.
+  private spawnDeployPadFX(): void {
+    // Rising motes inside the pad — sourced from a ring just inside the
+    // pad edge so they look like the pad is venting energy upward.
+    const motes = this.add.particles(this.padX, this.padY, 'fx-spark', {
+      x: { min: -this.padRadius * 0.7, max: this.padRadius * 0.7 },
+      y: { min: -10, max: 18 },
+      speed: { min: 22, max: 60 },
+      angle: { min: 255, max: 285 },
+      lifespan: 1400,
+      frequency: 110,
+      scale: { start: 0.6, end: 0 },
+      alpha: { start: 0.85, end: 0 },
+      tint: [Balance.colors.extraction, 0xffffff],
+    });
+    motes.setDepth(-1);
+
+    // Outer ring decal — a thin circle stroke baked into a graphics object
+    // centered at the origin, positioned at the pad. We tween its scale
+    // and alpha to make it pulse outward.
+    const ring = this.add.graphics();
+    ring.lineStyle(2, Balance.colors.extraction, 0.85);
+    ring.strokeCircle(0, 0, this.padRadius);
+    ring.setPosition(this.padX, this.padY);
+    ring.setDepth(-1);
+    this.tweens.add({
+      targets: ring,
+      scaleX: { from: 1, to: 1.22 },
+      scaleY: { from: 1, to: 1.22 },
+      alpha: { from: 0.55, to: 0 },
+      duration: 1500,
+      repeat: -1,
+      ease: 'Quad.easeOut',
+    });
+
+    // Stash for shutdown cleanup via ambientDecor pile (same lifecycle).
+    this.ambientDecor.push(motes);
+    this.ambientDecor.push(ring);
+  }
+
+  // Spawn one ore deposit per active generator row, plus a single feed belt
+  // and outbound belt running through ALL generators sharing that row.
+  // Generators visually "sit on" the belt so the chain reads as continuous
+  // ore-in / scrap-out flow even when both columns are active.
+  //
+  // feedConveyors[i] / outboundConveyors[i] are parallel to generators[i] —
+  // multiple generators in the same row reference the same Conveyor instance.
+  // Destruction dedupes via a Set so we never double-free.
+  private spawnOreAndConveyors(): void {
+    if (!this.smelter) return;
+    const oreSlots = Balance.factory.oreDepositPositions;
+    const activeYs = new Set<number>(this.generators.map(g => g.y));
+    const sm = this.smelter;
+
+    // Per-row conveyor cache so generators in the same y-band share belts.
+    const feedByRow = new Map<number, Conveyor>();
+    const outboundByRow = new Map<number, Conveyor>();
+    // Track distinct belt instances for the chain links so destroy() knows
+    // about them too.
+    const linkBelts: Conveyor[] = [];
+
+    for (let i = 0; i < oreSlots.length; i++) {
+      const ore = oreSlots[i];
+      // Always render the ore deposit — gives the factory presence at low
+      // gen levels. Conveyors and chains only attach to rows that have an
+      // active generator.
+      this.oreDeposits.push(new OreDeposit(this, ore.x, ore.y, ore.tint));
+      if (!activeYs.has(ore.y)) continue;
+
+      const rowGens = this.generators.filter(g => g.y === ore.y);
+      if (rowGens.length === 0) continue;
+      const eastmost = rowGens.reduce((a, b) => (a.x > b.x ? a : b));
+      const westmost = rowGens.reduce((a, b) => (a.x < b.x ? a : b));
+
+      // Feed belt: ore east-edge → eastmost generator's west-edge.
+      const tint: ConveyorTint =
+        ore.tint === 'gold' ? 'gold' :
+        ore.tint === 'violet' ? 'violet' :
+        'cyan';
+      const feed = new Conveyor(
+        this,
+        ore.x + 36,
+        ore.y,
+        eastmost.x - Balance.factory.generatorSize / 2 - 4,
+        ore.y,
+        tint,
+      );
+      feedByRow.set(ore.y, feed);
+
+      // Outbound belt: eastmost generator's east-edge → smelter intake.
+      const beltStartX = eastmost.x + Balance.factory.generatorSize / 2 + 4;
+      const outbound = new Conveyor(this, beltStartX, ore.y, sm.x - 100, sm.y + 8, 'cyan');
+      outboundByRow.set(ore.y, outbound);
+
+      // Inter-generator chain belt (only when both columns active in this
+      // row). Short cyan belt linking westmost → eastmost.
+      if (rowGens.length > 1) {
+        const link = new Conveyor(
+          this,
+          westmost.x + Balance.factory.generatorSize / 2 + 4,
+          ore.y,
+          eastmost.x - Balance.factory.generatorSize / 2 - 4,
+          ore.y,
+          'cyan',
+        );
+        linkBelts.push(link);
+      }
+    }
+
+    // Build parallel arrays aligned with this.generators. Multiple entries
+    // may reference the same Conveyor; that's fine — sendCargo() runs an
+    // independent cargo per call.
+    for (const gen of this.generators) {
+      const feed = feedByRow.get(gen.y);
+      const outbound = outboundByRow.get(gen.y);
+      if (feed) this.feedConveyors.push(feed);
+      if (outbound) this.outboundConveyors.push(outbound);
+    }
+    // Stash link belts in feedConveyors too so they get tick()'d each frame
+    // and destroyed via the dedup-aware shutdown path.
+    for (const link of linkBelts) this.feedConveyors.push(link);
+  }
+
+  // Single "shipping" conveyor running from the smelter east toward the
+  // deploy pad. Continuous decorative cargo gives the factory a sense of
+  // material moving out for the next raid.
+  private spawnShippingConveyor(): void {
+    if (!this.smelter) return;
+    const startX = this.smelter.x + 110;
+    const startY = this.smelter.y + 8;
+    const endX = this.padX - this.padRadius - 20;
+    const endY = this.padY;
+    this.shippingConveyor = new Conveyor(this, startX, startY, endX, endY, 'gold');
+    // Kick off a slow trickle of decorative cargo packets.
+    this.shippingCargoTimer = 0;
+  }
+
+  private shippingCargoTimer = 0;
+
+  // Tear down all feed + outbound conveyors. Multiple generators in the same
+  // row reference the same Conveyor, so we dedupe before destroying.
+  private destroyConveyors(): void {
+    const seen = new Set<Conveyor>();
+    for (const belt of this.feedConveyors) {
+      if (seen.has(belt)) continue;
+      seen.add(belt);
+      belt.destroy();
+    }
+    for (const belt of this.outboundConveyors) {
+      if (seen.has(belt)) continue;
+      seen.add(belt);
+      belt.destroy();
+    }
+    this.feedConveyors = [];
+    this.outboundConveyors = [];
+  }
+
   private spawnScrapAt(gen: Generator): void {
+    // Generator visual reaction: brightness flash + spark burst + gear kick.
+    gen.triggerProductionBurst();
     const pos = gen.randomDropPosition();
     const p = this.pickups.get(pos.x, pos.y) as Pickup | null;
     if (!p) return;
     p.spawn(pos.x, pos.y, 'scrap', 1);
+
+    // Send a decorative chunk along the outbound conveyor for this generator
+    // so the player sees the scrap "shipping" toward the smelter. Pure visual
+    // — the actual scrap pickup is what gets banked by the worker / player.
+    const idx = this.generators.indexOf(gen);
+    if (idx >= 0 && idx < this.outboundConveyors.length) {
+      const belt = this.outboundConveyors[idx];
+      belt.sendCargo(2.4);
+    }
+    // Also send an inbound "ore" chunk on the feed conveyor — the visual
+    // implication is the generator just ate a chunk of ore to produce.
+    if (idx >= 0 && idx < this.feedConveyors.length) {
+      const feed = this.feedConveyors[idx];
+      feed.sendCargo(1.4);
+    }
   }
 
   private spawnWorkers(): void {
@@ -382,6 +643,8 @@ export class FactoryScene extends Phaser.Scene {
   }
 
   private onWorkerDelivered(value: number, wx: number, _wy: number): void {
+    // Smelter visibly reacts to each delivery — funnel pulse + ember burst.
+    this.smelter?.pulseDeposit();
     // Show a brief world-pinned "+N" popup near the deposit point.
     // Slight lateral offset so simultaneous deliveries from each side stay readable.
     const POPUP_LATERAL_OFFSET = 14;
@@ -478,12 +741,16 @@ export class FactoryScene extends Phaser.Scene {
   private rebuildFactoryFloor(): void {
     for (const gen of this.generators) gen.destroy();
     this.generators = [];
+    for (const ore of this.oreDeposits) ore.destroy();
+    this.oreDeposits = [];
+    this.destroyConveyors();
     for (const drone of this.drones) drone.destroy();
     this.drones = [];
     for (const v of this.milestoneVisuals.filter(v => v.getData('milestone') === true)) v.destroy();
     this.milestoneVisuals = this.milestoneVisuals.filter(v => v.getData('milestone') !== true);
 
     this.spawnGenerators();
+    this.spawnOreAndConveyors();
     this.spawnMilestoneVisuals();
     this.spawnDrones();
     WorkerSystem.rebuild();
@@ -772,30 +1039,37 @@ export class FactoryScene extends Phaser.Scene {
       }
     }));
 
-    // --- Cable conduits: dim trunks routed from each generator slot to the
-    //     deploy pad, with a thinner cyan trace on top so power feels
-    //     "live". Uses generatorPositions (not the spawned generators) so
-    //     the cables exist even when later slots are still locked. ---
+    // --- Cable conduits: dim trunks routed from each generator slot down
+    //     to the smelter's east side (where the shipping conveyor exits)
+    //     then east to the deploy pad. A thinner cyan trace on top so
+    //     power feels "live". ---
+    const smelterEastX = Balance.factory.smelter.x + 110;
     const drawCableRun = (g: Phaser.GameObjects.Graphics, lineColor: number, lineAlpha: number, width: number): void => {
       g.lineStyle(width, lineColor, lineAlpha);
+      // Trunk along the top + bottom edges connecting all generators back
+      // toward the smelter rather than running through the play area.
       for (const gpos of Balance.factory.generatorPositions) {
+        const trunkY = gpos.y > 0 ? wb.maxY - 80 : wb.minY + 80;
         g.beginPath();
-        g.moveTo(gpos.x + Balance.factory.generatorSize / 2, gpos.y);
-        g.lineTo(0, gpos.y);
-        g.lineTo(0, 0);
-        g.lineTo(this.padX - this.padRadius - 6, 0);
+        g.moveTo(gpos.x, gpos.y + (gpos.y > 0 ? 28 : -28));
+        g.lineTo(gpos.x, trunkY);
+        g.lineTo(smelterEastX, trunkY);
+        g.lineTo(smelterEastX, 0);
         g.strokePath();
       }
+      // East-bound trunk to the pad.
+      g.beginPath();
+      g.moveTo(smelterEastX, 0);
+      g.lineTo(this.padX - this.padRadius - 6, 0);
+      g.strokePath();
     };
     this.ambientDecor.push(bake(-6, g => {
       drawCableRun(g, slate, 1, 5);
       drawCableRun(g, themeColor, 0.55, 2);
-      // Junction nodes at the bends so the cable run reads as routed.
+      // Junction nodes at the smelter junction and pad.
       g.fillStyle(themeColor, 0.75);
-      for (const gpos of Balance.factory.generatorPositions) {
-        g.fillCircle(0, gpos.y, 4);
-      }
-      g.fillCircle(0, 0, 5);
+      g.fillCircle(smelterEastX, 0, 5);
+      g.fillCircle(this.padX - this.padRadius - 6, 0, 5);
     }));
 
     // --- Loading-bay hazard stripes around the deploy pad. A box of
@@ -841,16 +1115,20 @@ export class FactoryScene extends Phaser.Scene {
     }));
 
     // --- Idle chassis: 6 non-functional placeholder machine boxes in the
-    //     dead zones so the workshop has neighbours. Distinct from the
-    //     real Generator entity (different color + size) so the player
-    //     doesn't mistake them for upgradeable hardware. ---
+    //     dead zones around the deploy pad so the east side of the workshop
+    //     reads as a populated shipping area. Distinct from the real
+    //     Generator entity (different color + size) so the player doesn't
+    //     mistake them for upgradeable hardware. ---
     const chassisSpots: Array<{ x: number; y: number; w: number; h: number }> = [
-      { x: -650, y: -350, w: 80, h: 56 },
-      { x: -650, y: 360, w: 80, h: 56 },
-      { x: 130, y: -380, w: 110, h: 50 },
-      { x: 130, y: 360, w: 110, h: 50 },
-      { x: 660, y: -350, w: 80, h: 56 },
-      { x: 660, y: 360, w: 80, h: 56 },
+      { x: 220, y: -400, w: 100, h: 50 },
+      { x: 220, y:  400, w: 100, h: 50 },
+      { x: 360, y: -440, w: 70, h: 44 },
+      { x: 360, y:  440, w: 70, h: 44 },
+      { x: 680, y: -420, w: 80, h: 56 },
+      { x: 680, y:  420, w: 80, h: 56 },
+      // Two crates flanking the smelter for variety.
+      { x:  60, y: -90, w: 50, h: 38 },
+      { x:  60, y:  110, w: 50, h: 38 },
     ];
     this.ambientDecor.push(bake(0, g => {
       for (const s of chassisSpots) {
@@ -869,23 +1147,20 @@ export class FactoryScene extends Phaser.Scene {
       }
     }));
 
-    // --- Deposit indicator: amber dashed circle at the worker deposit point.
-    //     Small enough not to dominate the floor; bright enough to be readable.
-    const dep = Balance.factory.workerDepositPoint;
+    // --- Floor decals: "RAW ORE" label on the west side and "SHIPPING" on the
+    //     east side, baked as faint floor markings so the player gets the
+    //     spatial story (ore enters west, deploys east). ---
     this.ambientDecor.push(bake(-4, g => {
-      // Outer amber ring.
-      g.lineStyle(2, 0xff8800, 0.55);
-      g.strokeCircle(dep.x, dep.y, 20);
-      // Inner fill dot.
-      g.fillStyle(0xff8800, 0.15);
-      g.fillCircle(dep.x, dep.y, 18);
-      // Four corner tick-marks for a crosshair feel.
-      g.lineStyle(2, 0xffb347, 0.75);
-      const t = 8;
-      g.lineBetween(dep.x - 22, dep.y, dep.x - 22 + t, dep.y);
-      g.lineBetween(dep.x + 22 - t, dep.y, dep.x + 22, dep.y);
-      g.lineBetween(dep.x, dep.y - 22, dep.x, dep.y - 22 + t);
-      g.lineBetween(dep.x, dep.y + 22 - t, dep.x, dep.y + 22);
+      // West-side "MINING" zone outline.
+      g.lineStyle(2, 0xffd75a, 0.18);
+      g.strokeRect(wb.minX + 30, wb.minY + 80, 280, wb.maxY - wb.minY - 160);
+      // East-side "SHIPPING" zone outline.
+      g.lineStyle(2, 0x72ff9f, 0.18);
+      g.strokeRect(this.padX - 200, wb.minY + 80, 400, wb.maxY - wb.minY - 160);
+      // Central refinery zone.
+      const sm = Balance.factory.smelter;
+      g.lineStyle(2, themeColor, 0.22);
+      g.strokeRect(sm.x - 130, sm.y - 110, 260, 220);
     }));
   }
 
