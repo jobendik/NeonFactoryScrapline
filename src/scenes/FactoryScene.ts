@@ -396,8 +396,7 @@ export class FactoryScene extends Phaser.Scene {
       this.unpinHtmlFromWorld(el);
     }, 1200);
     // Also fire FTUE toast the very first time a worker delivers.
-    const save = saveSystem.get();
-    if (save.upgrades.worker >= 1 && !this.workerFirstDeliveryToastShown) {
+    if (!this.workerFirstDeliveryToastShown) {
       this.workerFirstDeliveryToastShown = true;
       this.showHtmlToast('🤖 Hauler delivered scrap — automation is live!', 'cyan', 3500);
     }
@@ -454,7 +453,7 @@ export class FactoryScene extends Phaser.Scene {
       case 'drone':
         return u.droneUpgrade;
       case 'worker':
-        return u.workerUpgrade;
+        return true;
       case 'damage':
         return u.damageUpgrade;
       case 'luck':
