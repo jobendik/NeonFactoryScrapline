@@ -1,7 +1,7 @@
-// FactoryWorker — autonomous "Hauler" entity that continuously collects scrap
-// from the factory floor and delivers it to the deposit point.
+// FactoryWorker — autonomous "pixie" entity that continuously collects stardust (theme: pixie)
+// from the garden floor and delivers it to the deposit point.
 //
-// Visual: amber/orange body (~20 px), carry-cube offset above when loaded.
+// Visual: amber/orange body (~20 px), carry-mote offset above when loaded.
 // Trail at level >= trailLevelUnlock.
 //
 // Locomotion uses direct setPosition() (no Arcade Physics) identical to
@@ -9,7 +9,7 @@
 //
 // State machine: 'searching' → 'movingToPickup' → 'movingToDeposit' → 'depositing'
 //
-// Callers (WorkerSystem) must call destroy() when the worker is no longer needed.
+// Callers (WorkerSystem) must call destroy() when the pixie is no longer needed.
 
 import Phaser from 'phaser';
 import { Balance } from '../config/Balance';
@@ -27,11 +27,11 @@ interface TrailPoint {
   age: number;
 }
 
-// Worker color palette — amber/orange to distinguish from cyan player/drones.
+// Pixie color palette — amber/orange to distinguish from cyan player/fireflies.
 const COLOR_FILL_A = '#ffb347';   // top gradient
 const COLOR_FILL_B = '#e06000';   // bottom gradient
 const COLOR_GLOW   = 0xff8800;    // Phaser hex glow tint
-const COLOR_CARRY  = 0x22f6ff;    // carry-cube: same cyan as scrap pickups
+const COLOR_CARRY  = 0x7cc9ff;    // carry-mote: same cyan as stardust pickups
 const MAX_TRAIL_AGE = 0.5;
 
 export class FactoryWorker {
@@ -46,9 +46,9 @@ export class FactoryWorker {
 
   // Target pickup being pursued (null when searching / depositing).
   targetPickup: Pickup | null = null;
-  // Accumulated carry value (scrap value of the picked-up items).
+  // Accumulated carry value (stardust value of the picked-up items).
   carryValue = 0;
-  // Max items this worker can carry per trip (1 or 2 per UpgradeEffects.workerCarry).
+  // Max items this pixie can carry per trip (1 or 2 per UpgradeEffects.workerCarry).
   carryCapacity = 1;
   // Pause timer after depositing before searching again.
   private depositPause = 0;
@@ -58,7 +58,7 @@ export class FactoryWorker {
 
   private speed = 0;
   private pickupRadius = 0;
-  // Wander target used in 'searching' state when no scrap is visible.
+  // Wander target used in 'searching' state when no stardust is visible.
   private wanderX = 0;
   private wanderY = 0;
   private wanderTimer = 0;
@@ -93,7 +93,7 @@ export class FactoryWorker {
       this.trailGfx.setDepth(2);
     }
 
-    // Pick a random initial wander destination near the generators.
+    // Pick a random initial wander destination near the moonwells.
     this.pickNewWanderTarget();
   }
 
@@ -112,7 +112,7 @@ export class FactoryWorker {
     this.wanderTimer = 2.5 + Math.random() * 2;
   }
 
-  // ---- called by WorkerSystem each frame ----
+  // ---- called by WorkerSystem each frame (theme: pixie system) ----
 
   update(
     dt: number,
@@ -180,7 +180,7 @@ export class FactoryWorker {
     const step = Math.min(this.speed * dt, dist);
     this.x += (dx / dist) * step;
     this.y += (dy / dist) * step;
-    // Subtle bob rotation so the worker looks alive.
+    // Subtle bob rotation so the pixie looks alive.
     this.sprite.setRotation(Math.atan2(dy, dx) + Math.PI / 2);
   }
 
@@ -196,7 +196,7 @@ export class FactoryWorker {
       return null;
     }
 
-    // Find the nearest active scrap pickup within pickupRadius.
+    // Find the nearest active stardust pickup within pickupRadius.
     let best: Pickup | null = null;
     let bestDist = this.pickupRadius;
     for (const p of pickups) {
@@ -211,7 +211,7 @@ export class FactoryWorker {
       return null;
     }
 
-    // No scrap visible — wander near the generators so the worker looks busy.
+    // No stardust visible — wander near the moonwells so the pixie looks busy.
     this.wanderTimer -= dt;
     const wx = this.wanderX, wy = this.wanderY;
     const distToWander = Math.hypot(wx - this.x, wy - this.y);
@@ -222,7 +222,7 @@ export class FactoryWorker {
       this.pickNewWanderTarget();
     }
 
-    // Opportunistically pick up scrap directly underfoot while wandering.
+    // Opportunistically pick up stardust directly underfoot while wandering.
     return this.tryClaimPickup(pickups, depositX, depositY);
   }
 
@@ -273,7 +273,7 @@ export class FactoryWorker {
     return null;
   }
 
-  // Try to pick up any active scrap directly under the worker (opportunistic).
+  // Try to pick up any active stardust directly under the pixie (opportunistic).
   private tryClaimPickup(pickups: Pickup[], _depositX: number, _depositY: number): 'deposited' | null {
     if (this.carryValue >= this.carryCapacity) {
       this.state = 'movingToDeposit';
@@ -316,7 +316,7 @@ export class FactoryWorker {
   // ---- static texture builder (called once per scene) ----
 
   static ensureTextures(scene: Phaser.Scene): void {
-    // Worker body — rounded amber hexagon with bright pip.
+    // Pixie body — rounded amber hexagon with bright pip.
     if (!scene.textures.exists(WORKER_BODY_KEY)) {
       const dim = 22;
       const tex = scene.textures.createCanvas(WORKER_BODY_KEY, dim, dim);
@@ -358,7 +358,7 @@ export class FactoryWorker {
       }
     }
 
-    // Carry cube — tiny cyan square (scrap look).
+    // Carry mote — tiny cyan square (stardust look).
     if (!scene.textures.exists(WORKER_CARRY_KEY)) {
       const dim = 9;
       const tex = scene.textures.createCanvas(WORKER_CARRY_KEY, dim, dim);

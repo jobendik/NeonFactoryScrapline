@@ -4,11 +4,11 @@ import { applyGlow } from '../systems/NeonFX';
 
 export const DRONE_TEXTURE_KEY = 'drone-body';
 
-// Factory drone per blueprint §8.5 ("Drone Lv. 1 first drone takes off from bay").
+// Garden firefly per blueprint §8.5 ("Drone Lv. 1 first firefly takes flight from its bloom") (theme: firefly).
 // Orbits the player and tugs nearby pickups toward the player by extending the
 // effective magnet radius around its own position. Drone Lv. 3 adds a trail
-// (drawn as a fading line behind the drone). Raid drones - which actually fire
-// at enemies - arrive in a later milestone.
+// (drawn as a fading line behind the firefly). Night-flight fireflies - which actually loose
+// spark bolts at the shadow moths - arrive in a later milestone.
 
 export interface DroneOpts {
   orbitRadius: number;
@@ -88,11 +88,11 @@ export class Drone {
     const ctx = tex.context;
     const cx = dim / 2;
     const cy = dim / 2;
-    // Cyan halo
+    // Cyan glow halo
     const halo = ctx.createRadialGradient(cx, cy, 0, cx, cy, cx);
-    halo.addColorStop(0, 'rgba(34, 246, 255, 0.55)');
-    halo.addColorStop(0.5, 'rgba(34, 246, 255, 0.25)');
-    halo.addColorStop(1, 'rgba(34, 246, 255, 0)');
+    halo.addColorStop(0, 'rgba(124, 201, 255, 0.55)');
+    halo.addColorStop(0.5, 'rgba(124, 201, 255, 0.25)');
+    halo.addColorStop(1, 'rgba(124, 201, 255, 0)');
     ctx.fillStyle = halo;
     ctx.fillRect(0, 0, dim, dim);
     // Diamond body with gradient
@@ -104,7 +104,7 @@ export class Drone {
     ctx.closePath();
     const body = ctx.createLinearGradient(cx, cy - 7, cx, cy + 7);
     body.addColorStop(0, '#e6ffff');
-    body.addColorStop(0.4, '#22f6ff');
+    body.addColorStop(0.4, '#7cc9ff');
     body.addColorStop(1, '#0a4855');
     ctx.fillStyle = body;
     ctx.fill();

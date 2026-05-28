@@ -28,14 +28,14 @@ export const DRONE_MISSION_ORDER = [
   'rare_salvage',
 ] as const;
 
-/** Base scrap earned by a SCRAP RUN mission (multiplied by generator upgrade level). */
+/** Base stardust earned by a STARDUST RUN errand (multiplied by moonwell upgrade level). */
 const SCRAP_RUN_BASE = 200;
 
 export const DroneMissionDefs: Record<string, DroneMissionDef> = {
-  scrap_run: { id: 'scrap_run', name: 'SCRAP RUN', durationMs: 30 * MIN, desc: `Returns with ${SCRAP_RUN_BASE}× gen level Scrap.` },
-  core_hunt: { id: 'core_hunt', name: 'CORE HUNT', durationMs: 4 * HOUR, desc: 'Returns with 100 Scrap and 2 Cores.' },
-  corruption_scan: { id: 'corruption_scan', name: 'CORRUPTION SCAN', durationMs: 8 * HOUR, desc: 'Returns with loot and clears 1 infested machine.' },
-  rare_salvage: { id: 'rare_salvage', name: 'RARE SALVAGE', durationMs: 12 * HOUR, desc: 'Long mission with big rewards.' },
+  scrap_run: { id: 'scrap_run', name: 'STARDUST RUN', durationMs: 30 * MIN, desc: `Returns with ${SCRAP_RUN_BASE}× moonwell level Stardust.` },
+  core_hunt: { id: 'core_hunt', name: 'STAR HEART HUNT', durationMs: 4 * HOUR, desc: 'Returns with 100 Stardust and 2 Star Hearts.' },
+  corruption_scan: { id: 'corruption_scan', name: 'WEED CLEANSE', durationMs: 8 * HOUR, desc: 'Returns with loot and clears 1 wilted plot.' },
+  rare_salvage: { id: 'rare_salvage', name: 'RARE FORAGE', durationMs: 12 * HOUR, desc: 'Long errand with big rewards.' },
 };
 
 function ensureShape(): void {

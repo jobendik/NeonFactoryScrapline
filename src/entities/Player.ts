@@ -31,14 +31,14 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private hitInvulnTimer = 0;
   private facing = 0;
   private body_!: Phaser.Physics.Arcade.Body;
-  // FTUE safety net per §5.1: tutorial raid clamps HP so the player can't die.
+  // FTUE safety net per §5.1: tutorial night flight clamps HP so the player can't die.
   // Default 0 means takeDamage behaves normally; tutorial sets it to 1.
   private hpFloor = 0;
   // Shield Bubble (§13). Each pickup grants +1 charge. takeDamage decrements
   // first - if a charge absorbed the hit, the player takes no HP damage.
   shieldCharges = 0;
   private shieldAura: Phaser.GameObjects.Graphics | null = null;
-  // M15 RunMods inputs. Cards mutate RunMods on RaidScene; the player calls
+  // M15 RunMods inputs. Cards mutate RunMods on RaidScene (theme: night-flight scene); the player calls
   // applyRunMods to refresh derived values (max HP / speed / dash cooldown)
   // and to seed Orbital Shield + Phoenix flags.
   private speedMult = 1;
@@ -48,7 +48,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private orbitalShieldRegenSec = 12;
   private orbitalShieldTimer = 0;
   phoenixCharges = 0;
-  // M22 — small thruster particle emitter behind the player. Follows the
+  // M22 — small trail-glow particle emitter behind the moon glider. Follows the
   // sprite each frame; cyan tint that brightens during dash.
   private thruster: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
 
@@ -69,24 +69,24 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
     // Derive max HP and speed from current upgrade levels at construction time.
     // A new Player is created on each scene re-entry, so this re-reads after
-    // every upgrade purchase between raids.
+    // every upgrade purchase between night flights.
     this.maxHp = UpgradeEffects.playerMaxHp();
     this.hp = this.maxHp;
     this.speed = UpgradeEffects.playerSpeed();
     this.initThruster(scene);
-    // M23 — apply equipped ship-skin tint. 'skin-default' uses 0xffffff
-    // (a no-op tint) so unmodified ships render with their texture color.
+    // M23 — apply equipped glider-skin tint. 'skin-default' uses 0xffffff
+    // (a no-op tint) so unmodified moon gliders render with their texture color.
     this.setTint(CosmeticSystem.getEquippedSkinColor());
-    // Subtle neon glow — outer ring at 4 + inner core at 1 makes the ship
+    // Subtle moonlit glow — outer ring at 4 + inner core at 1 makes the glider
     // pop without dominating the silhouette. Earlier outer=10 produced a
-    // near-solid cyan disc on screen, especially over the FactoryScene
+    // near-solid cyan disc on screen, especially over the magical garden scene
     // where there's less visual noise to compete with the halo.
     applyGlow(this, Balance.colors.player, 4, 1, 0.15);
   }
 
-  // Create the thruster emitter once per Player. Idle by default; tickThruster
+  // Create the trail-glow emitter once per Player. Idle by default; tickThruster
   // toggles emission based on movement so the trail doesn't sit on a stopped
-  // ship. Depth lives one below the sprite so it reads as "behind".
+  // glider. Depth lives one below the sprite so it reads as "behind".
   private initThruster(scene: Phaser.Scene): void {
     if (!scene.textures.exists(PARTICLE_TEXTURE_KEY)) {
       // ParticleEffects normally seeds the texture but Player is constructed
@@ -118,75 +118,83 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     const cx = size / 2;
     const cy = size / 2;
 
-    // Backdrop halo so the ship reads bright even without preFX glow.
+    // Backdrop halo so the glider reads bright even without preFX glow.
     // Pushed outward to size*0.6 so the bloom carries beyond the hull silhouette.
     const halo = ctx.createRadialGradient(cx, cy, 4, cx, cy, size * 0.6);
-    halo.addColorStop(0, 'rgba(34, 246, 255, 0.60)');
-    halo.addColorStop(0.35, 'rgba(34, 246, 255, 0.32)');
-    halo.addColorStop(0.7, 'rgba(34, 246, 255, 0.10)');
-    halo.addColorStop(1, 'rgba(34, 246, 255, 0)');
+    halo.addColorStop(0, 'rgba(124, 201, 255, 0.60)');
+    halo.addColorStop(0.35, 'rgba(124, 201, 255, 0.32)');
+    halo.addColorStop(0.7, 'rgba(124, 201, 255, 0.10)');
+    halo.addColorStop(1, 'rgba(124, 201, 255, 0)');
     ctx.fillStyle = halo;
     ctx.fillRect(0, 0, size, size);
 
-    // Wedge hull — outer dark plating, inner bright accent. Pointing along +x
-    // so rotation tracks the facing angle.
+    // Leaf-glider body — a smooth pointed leaf pointing along +x so rotation
+    // tracks the facing angle. Two swept wing-petals give it a "flyer" read.
     const noseX = size * 0.92;
-    const wingX = size * 0.20;
-    const wingY1 = size * 0.18;
-    const wingY2 = size * 0.82;
-    const notchX = size * 0.36;
+    const tailX = size * 0.16;
+    const midX = size * 0.50;
+    const topY = size * 0.20;
+    const botY = size * 0.80;
 
-    // Drop shadow
+    // Helper that traces the leaf silhouette (nose → tail along both edges).
+    const traceLeaf = (inset: number): void => {
+      ctx.beginPath();
+      ctx.moveTo(noseX - inset, cy);
+      ctx.quadraticCurveTo(midX, topY + inset, tailX + inset, cy);
+      ctx.quadraticCurveTo(midX, botY - inset, noseX - inset, cy);
+      ctx.closePath();
+    };
+
+    // Swept wing-petals (drawn first, behind the body).
+    ctx.fillStyle = 'rgba(150, 245, 190, 0.55)';
+    for (const dir of [-1, 1]) {
+      ctx.save();
+      ctx.translate(midX - 2, cy);
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.quadraticCurveTo(-size * 0.14, dir * size * 0.16, -size * 0.30, dir * size * 0.30);
+      ctx.quadraticCurveTo(-size * 0.06, dir * size * 0.12, 0, 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // Drop shadow under the leaf.
     ctx.save();
     ctx.shadowBlur = 12;
-    ctx.shadowColor = 'rgba(34, 246, 255, 0.85)';
-    ctx.fillStyle = '#0a1a22';
-    ctx.beginPath();
-    ctx.moveTo(noseX, cy);
-    ctx.lineTo(wingX, wingY1);
-    ctx.lineTo(notchX, cy);
-    ctx.lineTo(wingX, wingY2);
-    ctx.closePath();
+    ctx.shadowColor = 'rgba(124, 201, 255, 0.85)';
+    ctx.fillStyle = '#0c2238';
+    traceLeaf(0);
     ctx.fill();
     ctx.restore();
 
-    // Outline glow stroke
+    // Outline glow stroke.
     ctx.strokeStyle = 'rgba(255,255,255,0.95)';
     ctx.lineWidth = 2.5;
     ctx.lineJoin = 'round';
-    ctx.beginPath();
-    ctx.moveTo(noseX, cy);
-    ctx.lineTo(wingX, wingY1);
-    ctx.lineTo(notchX, cy);
-    ctx.lineTo(wingX, wingY2);
-    ctx.closePath();
+    traceLeaf(0);
     ctx.stroke();
 
-    // Cyan body plating (gradient front-to-back)
-    const body = ctx.createLinearGradient(notchX, cy, noseX, cy);
-    body.addColorStop(0, '#0b3a48');
-    body.addColorStop(0.6, '#22f6ff');
+    // Body fill — teal-to-moonlight gradient front-to-back.
+    const body = ctx.createLinearGradient(tailX, cy, noseX, cy);
+    body.addColorStop(0, '#1c6a5a');
+    body.addColorStop(0.55, '#7cc9ff');
     body.addColorStop(1, '#e6ffff');
     ctx.fillStyle = body;
-    ctx.beginPath();
-    ctx.moveTo(noseX - 2, cy);
-    ctx.lineTo(wingX + 4, wingY1 + 4);
-    ctx.lineTo(notchX + 4, cy);
-    ctx.lineTo(wingX + 4, wingY2 - 4);
-    ctx.closePath();
+    traceLeaf(3);
     ctx.fill();
 
-    // Cockpit dome (cyan glow circle)
+    // Glowing canopy dome (cyan glow circle)
     const dome = ctx.createRadialGradient(cx + 4, cy, 0, cx + 4, cy, 9);
     dome.addColorStop(0, 'rgba(255, 255, 255, 1)');
     dome.addColorStop(0.4, 'rgba(170, 245, 255, 0.95)');
-    dome.addColorStop(1, 'rgba(34, 246, 255, 0)');
+    dome.addColorStop(1, 'rgba(124, 201, 255, 0)');
     ctx.fillStyle = dome;
     ctx.beginPath();
     ctx.arc(cx + 4, cy, 9, 0, Math.PI * 2);
     ctx.fill();
 
-    // Yellow nose tip accent
+    // Yellow prow tip accent
     const tip = ctx.createLinearGradient(noseX - 14, cy, noseX, cy);
     tip.addColorStop(0, 'rgba(255, 215, 90, 0)');
     tip.addColorStop(1, '#ffd75a');
@@ -198,25 +206,31 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     ctx.closePath();
     ctx.fill();
 
-    // Wing panel lines (subtle dark detail)
-    ctx.strokeStyle = 'rgba(2, 18, 25, 0.85)';
-    ctx.lineWidth = 1;
+    // Leaf vein — central rib plus a couple of side veins.
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+    ctx.lineWidth = 1.2;
     ctx.beginPath();
-    ctx.moveTo(notchX + 6, cy - 5);
-    ctx.lineTo(size * 0.7, cy - 3);
-    ctx.moveTo(notchX + 6, cy + 5);
-    ctx.lineTo(size * 0.7, cy + 3);
+    ctx.moveTo(tailX + 6, cy);
+    ctx.lineTo(noseX - 6, cy);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.28)';
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    ctx.moveTo(midX, cy);
+    ctx.lineTo(midX - size * 0.1, cy - size * 0.08);
+    ctx.moveTo(midX, cy);
+    ctx.lineTo(midX - size * 0.1, cy + size * 0.08);
     ctx.stroke();
 
-    // Engine glow ports at the tail
-    for (const py of [wingY1 + 8, wingY2 - 8]) {
-      const eg = ctx.createRadialGradient(wingX + 6, py, 0, wingX + 6, py, 7);
+    // Trail glow motes at the tail of the leaf.
+    for (const py of [topY + 10, botY - 10]) {
+      const eg = ctx.createRadialGradient(tailX + 8, py, 0, tailX + 8, py, 7);
       eg.addColorStop(0, 'rgba(255,255,255,1)');
-      eg.addColorStop(0.4, 'rgba(34, 246, 255, 0.9)');
-      eg.addColorStop(1, 'rgba(34, 246, 255, 0)');
+      eg.addColorStop(0.4, 'rgba(124, 201, 255, 0.9)');
+      eg.addColorStop(1, 'rgba(124, 201, 255, 0)');
       ctx.fillStyle = eg;
       ctx.beginPath();
-      ctx.arc(wingX + 6, py, 7, 0, Math.PI * 2);
+      ctx.arc(tailX + 8, py, 7, 0, Math.PI * 2);
       ctx.fill();
     }
 
@@ -277,12 +291,12 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   private tickThruster(): void {
     if (!this.thruster) return;
-    // Position the emitter just behind the ship's tail along the facing axis.
+    // Position the emitter just behind the glider's tail along the facing axis.
     const tailX = this.x - Math.cos(this.facing) * 18;
     const tailY = this.y - Math.sin(this.facing) * 18;
     this.thruster.setPosition(tailX, tailY);
     // Bright yellow during dash, equipped-trail color otherwise. Only emit
-    // when actually moving — a stopped ship reads cleaner without trail churn.
+    // when actually moving — a stopped glider reads cleaner without trail churn.
     const moving = Math.hypot(this.vx, this.vy) > 24;
     if (moving && !this.thruster.emitting) this.thruster.start();
     else if (!moving && this.thruster.emitting) this.thruster.stop();
@@ -302,7 +316,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.dashTimer = Balance.player.dashDuration;
     this.invulnTimer = Balance.player.dashInvuln;
     // Dash Master card multiplies cooldown (×0.7 per stack).
-    // Quick Boots refinery upgrade composes with the Dash Master card mult.
+    // Quick Boots potion-cauldron upgrade composes with the Dash Master card mult.
     if (this.dashCharges < this.maxDashCharges) {
       this.dashCooldownTimer =
         Balance.player.dashCooldown * this.dashCooldownMult * UpgradeEffects.dashCooldownMult();
@@ -340,10 +354,10 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     return this.facing;
   }
 
-  // Re-reads max HP and speed from current upgrade levels. Used by FactoryScene
+  // Re-reads max HP and speed from current upgrade levels. Used by the garden scene
   // when an upgrade is purchased mid-session so the player feels the change
   // without having to redeploy. Also re-applies the current RunMods so a
-  // mid-raid card pick keeps the bonusHP / speedMult intact.
+  // mid-flight card pick keeps the bonusHP / speedMult intact.
   refreshFromUpgrades(): void {
     const newMax = UpgradeEffects.playerMaxHp() + this.bonusHP;
     if (newMax > this.maxHp) this.hp += newMax - this.maxHp;
@@ -354,7 +368,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   // Applies RunMods derived from drafted cards (and, in M16, operator passives).
   // Should be called after construction with the run's current mods, then again
-  // any time mods change (e.g. after a draft pick during a raid).
+  // any time mods change (e.g. after a draft pick during a night flight).
   applyRunMods(mods: RunMods): void {
     this.speedMult = mods.speedMult;
     this.dashCooldownMult = mods.dashCooldownMult;
@@ -363,7 +377,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     const oldBonus = this.bonusHP;
     this.bonusHP = mods.bonusHP;
     // Bonus HP additively raises max; pick-up grants top up current HP by the
-    // delta so a Hardy mid-raid feels generous.
+    // delta so a Hardy mid-flight feels generous.
     const delta = this.bonusHP - oldBonus;
     if (delta > 0) {
       this.maxHp += delta;
@@ -452,7 +466,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   // M20 REVIVE — restore HP to a fraction of max with a brief invuln window.
-  // Used by the rewarded-ad revive path so the player resumes immediately
+  // Used by the rewarded revive path so the player resumes immediately
   // after the modal closes without a death animation re-fire.
   reviveToRatio(ratio: number, invulnSec: number): void {
     if (ratio <= 0) return;

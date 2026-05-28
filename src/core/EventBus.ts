@@ -66,7 +66,7 @@ export const Events = {
   // Retention Phase 1 — account XP / level events.
   ACCOUNT_LEVEL_UP: 'account:levelup',
   XP_GRANTED: 'xp:granted',
-  // Factory workers — emitted each time a hauler deposits a scrap load.
+  // Garden pixies — emitted each time a pixie deposits a stardust load.
   WORKER_DELIVERED: 'worker:delivered',
 } as const;
 

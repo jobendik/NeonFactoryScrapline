@@ -2,13 +2,13 @@ import Phaser from 'phaser';
 import { Balance } from '../config/Balance';
 import { bus, Events } from '../core/EventBus';
 
-// Extraction pad per blueprint §7.7:
+// Moongate per blueprint §7.7:
 //   - Opens at `openAt` seconds (20s normal, 18s tutorial).
-//   - Player on pad → fill rises, reaches 1.0 in `extractionHoldTime` seconds (5s).
-//   - Player off pad → fill decays at `extractionDecayRate` × fill rate (0.85×).
-//   - At fill = 1: emit EXTRACTION_COMPLETE; scene handles the "moment".
+//   - Player on the gate → fill rises, reaches 1.0 in `extractionHoldTime` seconds (5s).
+//   - Player off the gate → fill decays at `extractionDecayRate` × fill rate (0.85×).
+//   - At fill = 1: emit EXTRACTION_COMPLETE; scene handles flying home through the moongate.
 //
-// Rendering: closed pad is a dim yellow disc; open pad is bright green with a
+// Rendering: closed gate is a dim yellow disc; open gate is bright green with a
 // pulsing outline. Fill ring is a separate Graphics object so it can be redrawn
 // cheaply each frame without recomputing the static base.
 
@@ -27,7 +27,7 @@ export class ExtractionSystem {
   private pulse = 0;
   private alreadyEmittedOpen = false;
   // External slow factor applied to fill rate. Extract Jammer enemies in
-  // range of the pad bring this below 1.0 each frame to slow the timer per
+  // range of the gate bring this below 1.0 each frame to slow the timer per
   // §14.1.
   private externalFillMult = 1;
   private holdTimeMult = 1;
@@ -66,7 +66,7 @@ export class ExtractionSystem {
       const fillPerSec = 1 / (Balance.raid.extractionHoldTime * this.holdTimeMult);
       if (inside) {
         // Extract Jammer slow applies only to the fill direction; decay is
-        // unaffected so leaving the pad still drains at the normal rate.
+        // unaffected so leaving the gate still drains at the normal rate.
         this.fill = Math.min(1, this.fill + dt * fillPerSec * this.externalFillMult);
         this.state = 'filling';
       } else {
@@ -74,7 +74,7 @@ export class ExtractionSystem {
         this.state = this.fill > 0 ? 'decaying' : 'open';
       }
       // Reset to 1.0 each frame — RaidScene re-applies the slow before the
-      // next tick if jammers are still in range.
+      // next tick if Extract Jammers are still in range.
       this.externalFillMult = 1;
       if (this.fill >= 1) {
         this.state = 'extracting';
@@ -111,7 +111,7 @@ export class ExtractionSystem {
   }
 
   // Called by RaidScene each frame BEFORE update() — when an Extract Jammer
-  // is in range of the pad, mult < 1.0 slows the fill rate. Reset to 1.0
+  // is in range of the gate, mult < 1.0 slows the fill rate. Reset to 1.0
   // after every update() so the next frame requires re-application.
   setExternalFillMult(mult: number): void {
     this.externalFillMult = Math.max(0, Math.min(1, mult));

@@ -1,19 +1,19 @@
 import type { MaterialWallet, RaidZoneId } from '../config/ScraplineDefs';
 
 // Shared type definitions used across systems.
-// Concrete domain shapes (Player, RaidState, etc.) are added as those systems are built.
+// Concrete domain shapes (Player, night-flight state, etc.) are added as those systems are built.
 
 export type GameMode = 'factory' | 'raid';
 
 export type RaidEndState = 'extracted' | 'failed' | 'collapsed';
 
-// Fine-grained "why did this raid end" tag. RaidEndState only captures the
-// outcome bucket (extract vs. fail vs. collapse); endReason disambiguates
+// Fine-grained "why did this night flight end" tag. RaidEndState only captures the
+// outcome bucket (fly home vs. fail vs. collapse); endReason disambiguates
 // `collapsed` (timer vs. voluntary leave) and gives the SummaryScene a
 // concrete coaching line per playbook §7.3 ("make failure explain itself").
-//   - 'extracted' : signal locked, loot secured
+//   - 'extracted' : moongate locked, stardust secured
 //   - 'died'      : player HP hit 0
-//   - 'timer'     : raid timer expired before extraction
+//   - 'timer'     : night-flight timer expired before flying home
 //   - 'voluntary' : player used LEAVE RAID on the SettingsMenu
 export type RaidEndReason = 'extracted' | 'died' | 'timer' | 'voluntary';
 
@@ -27,16 +27,16 @@ export interface RaidEndPayload {
   greedMult: number;
   // True when 50% unbanked-loot penalty was applied (state === 'failed' | 'collapsed').
   penaltyApplied: boolean;
-  // True when this was the FTUE tutorial raid (drives summary copy + downstream filters).
+  // True when this was the FTUE tutorial night flight (drives summary copy + downstream filters).
   tutorial: boolean;
-  // M17 — number of factory machines newly infested by this raid's outcome
-  // (always 0 for tutorial / extracted / grace-period failures). Surfaced
+  // M17 — number of garden devices newly blighted by this flight's outcome
+  // (always 0 for tutorial / flew-home / grace-period failures). Surfaced
   // on the SummaryScene as a prominent line so the player understands.
   newlyInfested?: number;
-  // M17 — number of machines restored from cleanse this raid. Surfaced as
+  // M17 — number of garden devices restored from cleanse this flight. Surfaced as
   // a smaller line beneath the loot card.
   machinesRestored?: number;
-  // M20 — true unless REVIVE was already prompted this raid (§17.3 mutex).
+  // M20 — true unless REVIVE was already prompted this flight (§17.3 mutex).
   // Defaults to true server-side if absent; SummaryScene reads this to
   // decide whether the DOUBLE LOOT button is interactive.
   allowDoubleLoot?: boolean;
@@ -47,14 +47,14 @@ export interface RaidEndPayload {
   runStats?: RaidRunStats;
   // XP awarded this run (computed by PlayerXpSystem.computeRaidXp).
   xpEarned?: number;
-  // Account level before and after this run (for showing level-up in summary).
+  // Academy level before and after this run (for showing level-up in summary).
   accountLevelBefore?: number;
   accountLevelAfter?: number;
   // Medal for notable performance (e.g. 'personalBest', 'lastSecond', 'longRun').
   comebackMedal?: ComebackMedal;
   // Single-line "what to do next" hint for the next-best-action row.
   nextBestAction?: string;
-  // Retention Phase 3 — when the run was a daily-seed extraction, the score
+  // Retention Phase 3 — when the run was a daily-seed fly-home, the score
   // submitted and whether it beat every previous daily-seed best on record.
   dailySeedScore?: number;
   dailySeedNewBest?: boolean;
@@ -67,26 +67,27 @@ export interface RaidRunStats {
   damageDealt: number;
   damageTaken: number;
   bestCombo: number;
+  // Stardust collected during the run.
   scrapCollectedInRun: number;
 }
 
 // Medal awarded for notable outcomes (shown as a chip on the result screen).
 export type ComebackMedal =
   | 'personalBest'    // new longest run
-  | 'lastSecond'      // extracted with ≤5s remaining
+  | 'lastSecond'      // flew home with ≤5s remaining
   | 'longRun'         // survived longer than previous run
-  | 'fullCargo'       // extracted with zero unbanked penalty
-  | 'greedyExtract'   // extracted with greed multiplier active
+  | 'fullCargo'       // flew home with zero unbanked penalty
+  | 'greedyExtract'   // flew home with the glimmer multiplier active
   | 'taskComplete'    // completed a daily task this run
-  | 'firstExtract';   // very first successful extraction
+  | 'firstExtract';   // very first successful fly-home through the moongate
 
 export type RaidMode = 'tutorial' | 'normal' | 'dailySeed';
 
 export interface RaidInitData {
-  // Set by BootScene when !save.tutorialDone, by FactoryScene's deploy pad it's false.
+  // Set by BootScene when !save.tutorialDone, by FactoryScene's launch pad it's false.
   tutorial?: boolean;
-  // M19 — explicit raid mode. When omitted, falls back to: tutorial→'tutorial',
-  // else 'normal'. Daily-seed mode is set by FactoryScene's daily-seed deploy.
+  // M19 — explicit night-flight mode. When omitted, falls back to: tutorial→'tutorial',
+  // else 'normal'. Daily-seed mode is set by FactoryScene's daily-seed launch.
   mode?: RaidMode;
   zoneId?: RaidZoneId;
 }
@@ -119,7 +120,7 @@ export interface WaypointTarget {
 }
 
 // Progressive UI reveal flags per blueprint §5.3. Each flips to true the first
-// time its unlock condition is met; never flips back. The FactoryScene's
+// time its unlock condition is met; never flips back. The garden's
 // upgrade panel reads these to gate row visibility.
 export interface FtueUnlocks {
   dailyClaim: boolean;

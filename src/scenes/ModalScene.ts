@@ -55,9 +55,9 @@ function variantForBorder(border: number): 'gold' | 'green' | 'red' | 'cyan' | '
     case 0xff416b:
     case 0xff4040:
       return 'red';
-    case 0x22f6ff:
+    case 0x7cc9ff:
       return 'cyan';
-    case 0xa76cff:
+    case 0xb98cff:
       return 'violet';
     case 0xffd75a:
     default:

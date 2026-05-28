@@ -108,7 +108,7 @@ function noise(opts: NoiseOpts): void {
 
 // ---- §20.2 SFX library ----
 
-// Player shoot - tiny bleep, every 0.1s during raid. Keep gain very low.
+// Player casts a spell - tiny bleep, every 0.1s during the night flight. Keep gain very low.
 export function sfxShoot(): void {
   tone({ freq: 1200, type: 'square', attack: 0.002, release: 0.05, gain: 0.045 });
 }
@@ -131,12 +131,12 @@ export function sfxDash(): void {
   noise({ duration: 0.06, gain: 0.08, highpass: 1200 });
 }
 
-// Scrap pickup - short bright blip.
+// Stardust pickup - short bright blip.
 export function sfxScrap(): void {
   tone({ freq: 1320, type: 'triangle', attack: 0.005, release: 0.10, gain: 0.16 });
 }
 
-// Core pickup - higher, longer with a chime tail.
+// Star Heart pickup - higher, longer with a chime tail.
 export function sfxCore(): void {
   tone({ freq: 880, type: 'triangle', attack: 0.005, release: 0.16, gain: 0.18 });
   tone({ freq: 1760, type: 'sine', attack: 0.005, release: 0.30, gain: 0.10 });
@@ -163,7 +163,7 @@ export function sfxEnemyDeath(): void {
   noise({ duration: 0.06, gain: 0.08, highpass: 600 });
 }
 
-// Enemy projectile fire (shooter).
+// Enemy spark-bolt fire (shooter).
 export function sfxEnemyShoot(): void {
   tone({ freq: 540, type: 'sawtooth', attack: 0.002, release: 0.08, gain: 0.07 });
 }
@@ -183,24 +183,24 @@ export function sfxUpgradePurchased(): void {
   setTimeout(() => tone({ freq: 990, type: 'triangle', release: 0.14, gain: 0.18 }), 70);
 }
 
-// Raid timer tick (final 10s). Quick metronome click.
+// Night-flight timer tick (final 10s). Quick metronome click.
 export function sfxTimerTick(): void {
   tone({ freq: 1480, type: 'square', attack: 0.001, release: 0.03, gain: 0.06 });
 }
 
-// Extraction pad opens - airy chime.
+// Moongate opens - airy chime.
 export function sfxExtractionOpen(): void {
   tone({ freq: 523.25, type: 'triangle', attack: 0.01, release: 0.30, gain: 0.18 });
   tone({ freq: 783.99, type: 'sine', attack: 0.01, release: 0.40, gain: 0.12 });
 }
 
-// Extraction tick - subtle pulse while standing on the pad.
+// Moongate tick - subtle pulse while standing on the gate.
 export function sfxExtractionTick(): void {
   tone({ freq: 1320, type: 'sine', attack: 0.001, release: 0.04, gain: 0.05 });
 }
 
-// §20.3 layered extraction success: boom + sweep + sparkle + chord.
-// The "chord" is the existing rising A-major arpeggio.
+// §20.3 layered fly-home success: boom + sweep + sparkle + chord.
+// The "chord" is the existing rising A-major arpeggio (flying home through the moongate).
 export function sfxExtractionSuccess(): void {
   // Boom
   sweep({ from: 110, to: 30, type: 'sine', duration: 0.5, gain: 0.35 });
@@ -223,7 +223,7 @@ export function sfxExtractionSuccess(): void {
   });
 }
 
-// Raid failed - low ominous fall.
+// Night flight failed - low ominous fall.
 export function sfxRaidFailed(): void {
   sweep({ from: 220, to: 55, type: 'sawtooth', duration: 1.1, gain: 0.30 });
 }
@@ -243,7 +243,7 @@ export function sfxMagnetBurst(): void {
 }
 
 export function sfxLaserOverdrive(): void {
-  // Two stacked higher tones, decay slowly.
+  // Two stacked higher tones, decay slowly (the Spell Overdrive surge).
   tone({ freq: 880, type: 'sawtooth', attack: 0.005, release: 0.5, gain: 0.14 });
   tone({ freq: 1320, type: 'sawtooth', attack: 0.005, release: 0.5, gain: 0.10, detune: 12 });
 }
@@ -265,7 +265,7 @@ export function sfxTimeBonus(): void {
   setTimeout(() => tone({ freq: 1320, type: 'triangle', release: 0.20, gain: 0.18 }), 60);
 }
 
-// Factory generator drops a Scrap pickup.
+// Garden moonwell drops a Stardust pickup.
 export function sfxGeneratorProduce(): void {
   tone({ freq: 780, type: 'square', attack: 0.002, release: 0.05, gain: 0.06 });
 }

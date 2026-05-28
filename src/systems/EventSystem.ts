@@ -27,8 +27,8 @@ export const EventSystem = {
     if (isWeekendBlitz(now)) {
       return {
         id: 'weekend_blitz',
-        name: 'WEEKEND BLITZ',
-        description: '+50% Scrap from raids',
+        name: 'WEEKEND BLOOM',
+        description: '+50% Stardust from flights',
         color: '#ffd75a',
         scrapMult: 1.5,
       };
@@ -36,9 +36,9 @@ export const EventSystem = {
     if (isCoreSurge(now)) {
       return {
         id: 'core_surge',
-        name: 'CORE SURGE',
-        description: '+1 Core per extraction',
-        color: '#a76cff',
+        name: 'STAR HEART SURGE',
+        description: '+1 Star Heart per flight',
+        color: '#b98cff',
         bonusCore: 1,
       };
     }

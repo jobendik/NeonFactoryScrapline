@@ -30,7 +30,7 @@ export const RESEARCH_ORDER = [
 export const ResearchDefs: Record<string, ResearchDef> = {
   orbital_loot: {
     id: 'orbital_loot',
-    name: 'ORBITAL LOOT',
+    name: 'ORBITING STARDUST',
     desc: 'Pickups briefly orbit before flying in.',
     costScrap: 200,
     costCores: 0,
@@ -38,8 +38,8 @@ export const ResearchDefs: Record<string, ResearchDef> = {
   },
   combat_drones: {
     id: 'combat_drones',
-    name: 'COMBAT DRONES',
-    desc: 'Your drones fire during raids.',
+    name: 'BATTLE FIREFLIES',
+    desc: 'Your fireflies cast during flights.',
     costScrap: 500,
     costCores: 2,
     durationMs: 60 * MIN,
@@ -47,7 +47,7 @@ export const ResearchDefs: Record<string, ResearchDef> = {
   },
   dual_capacitors: {
     id: 'dual_capacitors',
-    name: 'DUAL CAPACITORS',
+    name: 'TWIN GLIDE',
     desc: 'Dash gains 2 charges.',
     costScrap: 1500,
     costCores: 5,
@@ -55,16 +55,16 @@ export const ResearchDefs: Record<string, ResearchDef> = {
   },
   rapid_extraction: {
     id: 'rapid_extraction',
-    name: 'RAPID EXTRACTION',
-    desc: 'Extraction hold time reduced by 30%.',
+    name: 'SWIFT MOONGATE',
+    desc: 'Moongate hold time reduced by 30%.',
     costScrap: 800,
     costCores: 3,
     durationMs: 90 * MIN,
   },
   magnet_pulse: {
     id: 'magnet_pulse',
-    name: 'MAGNET PULSE',
-    desc: 'Factory auto-pulses nearby scrap.',
+    name: 'STARDUST PULSE',
+    desc: 'Garden auto-pulses nearby stardust.',
     costScrap: 600,
     costCores: 1,
     durationMs: 60 * MIN,
@@ -72,7 +72,7 @@ export const ResearchDefs: Record<string, ResearchDef> = {
   },
   vault_expansion: {
     id: 'vault_expansion',
-    name: 'VAULT EXPANSION',
+    name: 'GREENHOUSE EXPANSION',
     desc: 'Offline production cap doubled.',
     costScrap: 400,
     costCores: 0,
@@ -80,8 +80,8 @@ export const ResearchDefs: Record<string, ResearchDef> = {
   },
   augment_array: {
     id: 'augment_array',
-    name: 'AUGMENT ARRAY',
-    desc: 'Draft offers 4 cards instead of 3.',
+    name: 'CHARM ARRAY',
+    desc: 'Charm draft offers 4 charms instead of 3.',
     costScrap: 2000,
     costCores: 6,
     durationMs: 3 * HOUR,

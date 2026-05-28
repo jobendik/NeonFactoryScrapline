@@ -79,6 +79,15 @@ const config: Phaser.Types.Core.GameConfig = {
 
 const game = new Phaser.Game(config);
 
+// Dev-only debug handles so a headless browser (art-iteration screenshots)
+// can reach the game + save layer. Stripped from production builds.
+if ((import.meta as { env?: { DEV?: boolean } }).env?.DEV) {
+  void import('./platform/SaveSystem').then(m => {
+    (window as unknown as Record<string, unknown>).__game = game;
+    (window as unknown as Record<string, unknown>).__saveSystem = m.saveSystem;
+  });
+}
+
 // Install the HTML+CSS overlay system on top of the Phaser canvas. All menus,
 // panels, cards, and HUD chrome are HTML-driven from here on — Phaser keeps
 // gameplay rendering only. See src/ui/overlay/UIOverlay.ts.

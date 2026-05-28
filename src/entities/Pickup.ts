@@ -10,7 +10,7 @@ export type PickupType = 'scrap' | 'core';
 export const SCRAP_TEXTURE_KEY = 'pickup-scrap';
 export const CORE_TEXTURE_KEY = 'pickup-core';
 
-// Pickup entity. Pooled via a Phaser Group on the scene side.
+// Pickup entity — collectible stardust and Star Hearts. Pooled via a Phaser Group on the scene side.
 // Magnet behavior is manual (per-frame distance check + direct velocity set)
 // so it feels responsive; collection itself goes through Arcade overlap with
 // the player body, per architecture rules ("Arcade Physics for pickup collision").
@@ -26,8 +26,8 @@ export class Pickup extends Phaser.Physics.Arcade.Sprite {
   // orbitDurationSec, the pickup beelines and is collected as usual.
   private orbitTimer = 0;
   private orbitAngle = 0;
-  // M22 §8.5 Luck Lv. 5: core pickups leave a gold sparkle trail. One small
-  // emitter per active core; cleared on kill.
+  // M22 §8.5 Luck Lv. 5: Star Heart pickups leave a gold sparkle trail. One small
+  // emitter per active Star Heart; cleared on kill.
   private sparkleEmitter: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
@@ -36,8 +36,8 @@ export class Pickup extends Phaser.Physics.Arcade.Sprite {
     scene.add.existing(this);
     scene.physics.add.existing(this);
     this.body_ = this.body as Phaser.Physics.Arcade.Body;
-    // Texture is up to 28px (Core); body radius 7, offset (5,5) for the
-    // 24px Scrap texture centers around the cube. Cores resize automatically
+    // Texture is up to 28px (Star Heart); body radius 7, offset (5,5) for the
+    // 24px stardust texture centers around the mote. Star Hearts resize automatically
     // because Phaser keeps the body offset relative to the active texture's
     // bounds — recompute on spawn() if we add per-type radii later.
     this.body_.setCircle(7, 5, 5);
@@ -70,12 +70,12 @@ export class Pickup extends Phaser.Physics.Arcade.Sprite {
     this.body_.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
     this.body_.setDrag(Balance.magnet.popOutDrag, Balance.magnet.popOutDrag);
 
-    // §8.5 Luck Lv. 5 — gold sparkle trail on core pickups. The emitter is
-    // owned per-pickup (released on kill) since cores are short-lived.
+    // §8.5 Luck Lv. 5 — gold sparkle trail on Star Heart pickups. The emitter is
+    // owned per-pickup (released on kill) since Star Hearts are short-lived.
     this.refreshSparkleEmitter();
   }
 
-  // Used by the extraction "moment": every active pickup beelines to the player
+  // Used by the flying-home-through-the-moongate "moment": every active pickup beelines to the player
   // at flyInSpeed, ignoring magnet radius.
   flyIn(playerX: number, playerY: number, speed: number): void {
     if (!this.active) return;
@@ -98,7 +98,7 @@ export class Pickup extends Phaser.Physics.Arcade.Sprite {
   }
 
   // Build (or skip) the gold sparkle emitter per Luck Lv. 5. Idempotent —
-  // calling on a non-core pickup or a low-luck save is a no-op.
+  // calling on a non-Star-Heart pickup or a low-luck save is a no-op.
   private refreshSparkleEmitter(): void {
     if (this.sparkleEmitter) {
       this.sparkleEmitter.destroy();
@@ -188,17 +188,17 @@ export class Pickup extends Phaser.Physics.Arcade.Sprite {
         const cx = dim / 2;
         const cy = dim / 2;
         const r = 5;
-        // Cyan halo
+        // Cyan glow halo
         const halo = ctx.createRadialGradient(cx, cy, 1, cx, cy, cx);
-        halo.addColorStop(0, 'rgba(34, 246, 255, 0.85)');
-        halo.addColorStop(0.5, 'rgba(34, 246, 255, 0.35)');
-        halo.addColorStop(1, 'rgba(34, 246, 255, 0)');
+        halo.addColorStop(0, 'rgba(124, 201, 255, 0.85)');
+        halo.addColorStop(0.5, 'rgba(124, 201, 255, 0.35)');
+        halo.addColorStop(1, 'rgba(124, 201, 255, 0)');
         ctx.fillStyle = halo;
         ctx.fillRect(0, 0, dim, dim);
-        // Cube body with shine
+        // Stardust mote body with shine
         const body = ctx.createLinearGradient(cx - r, cy - r, cx + r, cy + r);
         body.addColorStop(0, '#e3ffff');
-        body.addColorStop(0.5, '#22f6ff');
+        body.addColorStop(0.5, '#7cc9ff');
         body.addColorStop(1, '#0e7a8a');
         ctx.fillStyle = body;
         ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
@@ -219,7 +219,7 @@ export class Pickup extends Phaser.Physics.Arcade.Sprite {
         const cx = dim / 2;
         const cy = dim / 2;
         const r = 8;
-        // Gold halo
+        // Gold glow halo
         const halo = ctx.createRadialGradient(cx, cy, 0, cx, cy, cx);
         halo.addColorStop(0, 'rgba(255, 215, 90, 0.85)');
         halo.addColorStop(0.5, 'rgba(255, 215, 90, 0.35)');

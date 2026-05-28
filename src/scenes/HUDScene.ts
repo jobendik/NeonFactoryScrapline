@@ -22,7 +22,7 @@ import type { RaidScene } from './RaidScene';
 import type { FactoryScene } from './FactoryScene';
 
 // HUDScene runs as a persistent overlay above whatever gameplay scene is active.
-// All static readouts (HP, timer, combo, greed, wallet, FPS, pips) live in an
+// All static readouts (HP, timer, combo, glimmer, wallet, FPS, pips) live in an
 // HTML+CSS overlay (HUDOverlay) — Phaser draws only the off-screen waypoint
 // arrow (which needs camera-space coords) and the settings cog / mute button.
 
@@ -47,7 +47,7 @@ export class HUDScene extends Phaser.Scene {
   private lastHp = -1;
   private hpFlashKind: 'heal' | 'damage' | null = null;
   private hpFlashTimer = 0;
-  // Bottom-center deploy hint (factory mode only). HTML overlay so it
+  // Bottom-center deploy hint (garden mode only). HTML overlay so it
   // matches the rest of the chrome's typography.
   private deployTextEl!: HTMLElement;
 
@@ -64,7 +64,7 @@ export class HUDScene extends Phaser.Scene {
     // we reposition + rotate each frame from RaidScene's camera scroll.
     this.buildWaypoint();
 
-    // Bottom-center deploy hint (factory mode only).
+    // Bottom-center deploy hint (garden mode only).
     this.deployTextEl = nfrEl('div', 'nfr-hud-deploy-hint');
     this.deployTextEl.style.display = 'none';
     nfrUIOverlay.mountHud(this, this.deployTextEl);
@@ -113,7 +113,7 @@ export class HUDScene extends Phaser.Scene {
     // Retention Phase 3 — level-up toast. PlayerXpSystem emits ACCOUNT_LEVEL_UP
     // every time the player crosses a level boundary; we surface a 'reward'
     // toast and a single analytics event per crossing. Multiple level-ups in
-    // one raid (rare but possible on a long run) each fire their own toast.
+    // one night flight (rare but possible on a long run) each fire their own toast.
     bus.on(Events.ACCOUNT_LEVEL_UP, (...args: unknown[]) => {
       const payload = args[0] as { level?: number; title?: string } | undefined;
       const level = payload?.level ?? PlayerXpSystem.getLevel();
@@ -177,7 +177,7 @@ export class HUDScene extends Phaser.Scene {
     // Same triangle silhouette as the old Phaser version: tip at +x,
     // notched butt at the rear.
     poly.setAttribute('points', '16,0 -10,-11 -4,0 -10,11');
-    poly.setAttribute('fill', '#22f6ff');
+    poly.setAttribute('fill', '#7cc9ff');
     poly.setAttribute('stroke', '#ffffff');
     poly.setAttribute('stroke-width', '2');
     poly.setAttribute('stroke-linejoin', 'round');

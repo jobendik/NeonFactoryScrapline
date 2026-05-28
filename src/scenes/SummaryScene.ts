@@ -13,9 +13,9 @@ import { UIOverlay, el, btn } from '../ui/overlay/UIOverlay';
 import { SCRAP_ICON, CORE_ICON } from '../ui/overlay/Icons';
 
 // Run-end summary per blueprint §7.10. Launched by RaidScene as a top-stack overlay
-// over a stopped raid. Three buttons:
-//   - Factory: stop the raid and start FactoryScene (M8 stub for now).
-//   - One More Raid: stop+restart RaidScene for immediate redeploy.
+// over a stopped night flight. Three buttons:
+//   - Garden: stop the night flight and start FactoryScene (M8 stub for now).
+//   - One More Night Flight: stop+restart RaidScene for immediate redeploy.
 //   - Double Loot: rewarded-ad path, intentionally disabled until M20.
 //
 // Retention Phase 1 additions: stats card, XP progression row, comeback medal chip,
@@ -32,9 +32,9 @@ const MEDAL_COPY: Record<ComebackMedal, { label: string; color: string }> = {
   lastSecond:     { label: '⚡ LAST-SECOND ESCAPE',  color: 'var(--nfr-cyan)'  },
   longRun:        { label: '↑ SURVIVED LONGER',      color: 'var(--nfr-violet)'},
   fullCargo:      { label: '✓ FULL CARGO',            color: 'var(--nfr-green)' },
-  greedyExtract:  { label: '◆ GREEDY EXTRACT',        color: 'var(--nfr-gold)'  },
+  greedyExtract:  { label: '◆ GLIMMER FLIGHT',         color: 'var(--nfr-gold)'  },
   taskComplete:   { label: '✓ DAILY TASK DONE',       color: 'var(--nfr-cyan)'  },
-  firstExtract:   { label: '★ FIRST EXTRACTION',      color: 'var(--nfr-green)' },
+  firstExtract:   { label: '★ FIRST FLIGHT',           color: 'var(--nfr-green)' },
 };
 
 function reasonCopy(state: RaidEndState, reason: RaidEndReason | undefined): string {
@@ -135,7 +135,7 @@ export class SummaryScene extends Phaser.Scene {
       root.appendChild(reason);
     }
 
-    // Modifier badge — greed (extracted) / penalty (failed) / infestation warn.
+    // Modifier badge — glimmer (extracted) / penalty (failed) / infestation warn.
     if (this.endState === 'extracted' && this.greedMult > 1.0) {
       const badge = el('div', 'nfr-summary__badge');
       badge.textContent = `${Strings.greedLabel}  ×${this.greedMult.toFixed(2)}`;
@@ -253,7 +253,7 @@ export class SummaryScene extends Phaser.Scene {
     const card = el('div', 'nfr-summary__stats-card');
     const rows: Array<{ label: string; value: string }> = [
       { label: 'TIME',        value: fmtSec(stats.elapsedSec) },
-      { label: 'KILLS',       value: `${stats.killCount}` },
+      { label: 'BANISHED',    value: `${stats.killCount}` },
       { label: 'DAMAGE',      value: `${Math.round(stats.damageDealt).toLocaleString()}` },
       { label: 'BEST COMBO',  value: `×${stats.bestCombo.toFixed(1)}` },
     ];

@@ -7,11 +7,11 @@ import { QualityManager } from './QualityManager';
 import { DailyQuestSystem } from './DailyQuestSystem';
 
 // Spawn director per blueprint §7.2:
-//   - Spawn cooldown ramps from 0.95s -> 0.24s as the raid progresses (intensity 0..1).
-//   - Max simultaneous enemies = 7 + intensity * 25, capped at 32.
+//   - Spawn cooldown ramps from 0.95s -> 0.24s as the night flight progresses (intensity 0..1).
+//   - Max simultaneous shadow creatures = 7 + intensity * 25, capped at 32.
 //   - Spawns 720px from the player on a random angle (off-screen on a 1280x720 canvas).
 //
-// Milestone 2 ships Grunt only. Weighted enemy roll lands in Milestone 5.
+// Milestone 2 ships the basic wisp only. Weighted enemy roll lands in Milestone 5.
 
 export interface PlayerPositionProvider {
   (): { x: number; y: number };
@@ -25,9 +25,9 @@ export interface WaveDirectorOpts {
   enemyHpMult?: number;
   // The reference duration for the intensity ramp. Tutorial passes 45 so
   // intensity reaches 1.0 at the end of a 45s tutorial instead of pretending
-  // the raid is 75s long.
+  // the night flight is 75s long.
   raidDuration?: number;
-  // M17 — when true, the director spawns an extra red-tinted swarmer wave
+  // M17 — when true, the director spawns an extra blight-tinted swarmer wave
   // alongside the normal roll so the player has something to cleanse.
   infestationWave?: boolean;
 }
@@ -42,14 +42,14 @@ export class WaveDirector {
   private spawnRateMult = 1;
   private enemyHpMult = 1;
   private raidDuration: number = Balance.raid.normalDuration;
-  // M14 greed escalation. Re-read each tick from RaidScene; drives spawn-rate
+  // M14 glimmer escalation. Re-read each tick from RaidScene; drives spawn-rate
   // boosts (multiplier on top of base spawnRateMult), tank-rush weighting
   // (extra share lifted from Grunt → Tank), and the one-shot elite spawn at
   // boss-wave step.
   private greedStep = 0;
   private eliteSpawned = false;
-  // M17 infestation wave state. When the player has any infested machines,
-  // the raid spawns periodic red-tinted swarmers in addition to the normal
+  // M17 garden-blight wave state. When the player has any blighted garden devices,
+  // the night flight spawns periodic blight-tinted swarmers in addition to the normal
   // roll. spawnInterval picks one every infestSpawnIntervalSec seconds.
   private infestationWave = false;
   private infestSpawnTimer = 0;
@@ -57,7 +57,7 @@ export class WaveDirector {
   // When the timer expires we spawn one and re-roll. Independent of the
   // normal spawn director.
   private lootGoblinTimer = 0;
-  // Extract Jammer only spawns after extraction opens. RaidScene flips this
+  // Extract Jammer only spawns after the moongate opens. RaidScene flips this
   // flag via setExtractionOpen().
   private extractionOpen = false;
 
@@ -94,7 +94,7 @@ export class WaveDirector {
     this.active = false;
   }
 
-  // Called by RaidScene each frame; the latest greed step drives the
+  // Called by RaidScene each frame; the latest glimmer step drives the
   // §7.3 escalation table (Balance.raid.greedEscalation).
   setGreedStep(step: number): void {
     this.greedStep = Math.max(0, Math.min(Balance.raid.greedEscalation.length - 1, step));
@@ -105,7 +105,7 @@ export class WaveDirector {
     this.elapsed += dt;
     this.spawnTimer -= dt;
 
-    // M17 infestation wave: spawn one extra red-tinted swarmer every N seconds
+    // M17 garden-blight wave: spawn one extra blight-tinted swarmer every N seconds
     // independently of the main spawn director, so cleanse pace is predictable.
     if (this.infestationWave) {
       this.infestSpawnTimer -= dt;
@@ -126,7 +126,7 @@ export class WaveDirector {
       );
     }
 
-    // Bomber (§7.3 / §14.1): per-second chance scaled by greed step, on top
+    // Bomber (§7.3 / §14.1): per-second chance scaled by glimmer step, on top
     // of the normal wave. Skip on first few seconds so it doesn't interrupt
     // the FTUE rhythm.
     if (this.elapsed > 6) {
@@ -137,7 +137,7 @@ export class WaveDirector {
       }
     }
 
-    // Extract Jammer (§14.1): only while extraction is open, low cadence.
+    // Extract Jammer (§14.1): only while the moongate is open, low cadence.
     if (this.extractionOpen && this.elapsed > 1 && this.rng.next() < 0.4 * dt) {
       this.spawnOne('extractJammer');
     }
@@ -153,7 +153,7 @@ export class WaveDirector {
     const qualityCap = QualityManager.enemyCap();
     const cap = Math.min(qualityCap, Math.max(1, Math.floor(rawCap * effectiveSpawnMult)));
 
-    // Boss wave (§7.3 greed x3): spawn a single elite the first time we cross
+    // Boss wave (§7.3 glimmer x3): spawn a single elite the first time we cross
     // a step that calls for one. The eliteSpawned latch ensures we don't
     // re-summon on every frame after the threshold.
     const eliteEarly = DailyQuestSystem.getModifier()?.id === 'core_bloom';
@@ -178,7 +178,7 @@ export class WaveDirector {
 
   private pickKind(): EnemyKind {
     // Weighted roll across §7.2 base spawn weights, with the §7.3 tank-rush
-    // factor lifting share from Grunt → Tank as greed escalates. Splitter
+    // factor lifting share from Grunt → Tank as glimmer escalates. Splitter
     // unlocks at greed step 1+ and Shield Carrier at step 2+ per Balance.
     const w = Balance.enemies.weights;
     const tankRush = Balance.raid.greedEscalation[this.greedStep].tankRushFactor;

@@ -12,14 +12,14 @@ export type FortuneReward =
   | { kind: 'factoryBoost'; minutes: number; label: string; color: string };
 
 const SEGMENTS: FortuneReward[] = [
-  { kind: 'scrap', amount: 100, label: '100 SCRAP', color: '#22f6ff' },
-  { kind: 'scrap', amount: 300, label: '300 SCRAP', color: '#72ff9f' },
-  { kind: 'cores', amount: 1, label: '1 CORE', color: '#ffd75a' },
-  { kind: 'scrap', amount: 100, label: '100 SCRAP', color: '#22f6ff' },
+  { kind: 'scrap', amount: 100, label: '100 STARDUST', color: '#7cc9ff' },
+  { kind: 'scrap', amount: 300, label: '300 STARDUST', color: '#72ff9f' },
+  { kind: 'cores', amount: 1, label: '1 STAR HEART', color: '#ffd75a' },
+  { kind: 'scrap', amount: 100, label: '100 STARDUST', color: '#7cc9ff' },
   { kind: 'factoryBoost', minutes: 30, label: '2× BOOST 30M', color: '#ffb24a' },
-  { kind: 'scrap', amount: 300, label: '300 SCRAP', color: '#72ff9f' },
-  { kind: 'cores', amount: 1, label: '1 CORE', color: '#ffd75a' },
-  { kind: 'scrap', amount: 500, label: '500 SCRAP', color: '#a76cff' },
+  { kind: 'scrap', amount: 300, label: '300 STARDUST', color: '#72ff9f' },
+  { kind: 'cores', amount: 1, label: '1 STAR HEART', color: '#ffd75a' },
+  { kind: 'scrap', amount: 500, label: '500 STARDUST', color: '#b98cff' },
 ];
 
 function grantReward(reward: FortuneReward): void {
@@ -82,7 +82,7 @@ function drawWheel(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, ang
   ctx.arc(cx, cy, 24, 0, Math.PI * 2);
   ctx.fillStyle = '#081019';
   ctx.fill();
-  ctx.strokeStyle = '#22f6ff';
+  ctx.strokeStyle = '#7cc9ff';
   ctx.lineWidth = 4;
   ctx.stroke();
 }

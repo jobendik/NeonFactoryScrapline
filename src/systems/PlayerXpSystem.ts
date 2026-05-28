@@ -40,16 +40,16 @@ function cumulativeXpForLevel(level: number): number {
 // Titles — every 5 levels a new rank is earned. Intermediate levels show
 // the same title with a subtle level number so progress still feels visible.
 const TITLES: Array<{ minLevel: number; title: string }> = [
-  { minLevel: 1,  title: 'SCRAP RUNNER'   },
-  { minLevel: 6,  title: 'FIELD AGENT'    },
-  { minLevel: 11, title: 'RAID SPECIALIST' },
-  { minLevel: 16, title: 'ZONE CLEARER'   },
-  { minLevel: 21, title: 'CORE GUARDIAN'  },
-  { minLevel: 26, title: 'SECTOR PHANTOM' },
-  { minLevel: 31, title: 'NEON STRIKER'   },
-  { minLevel: 36, title: 'FACTORY GHOST'  },
-  { minLevel: 41, title: 'APEX EXTRACTOR' },
-  { minLevel: 46, title: 'LEGEND'         },
+  { minLevel: 1,  title: 'STARDUST SEEDLING' },
+  { minLevel: 6,  title: 'NIGHT FORAGER'   },
+  { minLevel: 11, title: 'MOON FLYER'      },
+  { minLevel: 16, title: 'GLADE KEEPER'    },
+  { minLevel: 21, title: 'HEART GUARDIAN'  },
+  { minLevel: 26, title: 'TWILIGHT WISP'   },
+  { minLevel: 31, title: 'STARLIGHT CASTER' },
+  { minLevel: 36, title: 'GARDEN SPIRIT'   },
+  { minLevel: 41, title: 'MOON SAGE'       },
+  { minLevel: 46, title: 'LEGEND'          },
 ];
 
 // Per-event XP rewards.

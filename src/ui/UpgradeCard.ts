@@ -26,7 +26,7 @@ function ensureSidebar(scene: Phaser.Scene): SidebarEntry {
 
   const container = el('div', 'nfr-sidepanel');
   const header = el('div', 'nfr-sidepanel__title');
-  header.textContent = 'FACTORY UPGRADES';
+  header.textContent = 'GARDEN UPGRADES';
   container.appendChild(header);
 
   const remove = UIOverlay.mountHud(scene, container);

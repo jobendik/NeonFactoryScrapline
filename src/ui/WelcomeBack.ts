@@ -1,9 +1,9 @@
-// WelcomeBack — boot-time UI ceremony for the Factory hub. Runs once per
+// WelcomeBack — boot-time UI ceremony for the garden hub. Runs once per
 // FactoryScene.create when there is something worth celebrating: offline
-// Scrap accrual, a comeback bonus, a DOUBLE PAYDAY roll, a live streak,
+// stardust accrual, a comeback bonus, a DOUBLE BLOOM roll, a live streak,
 // or a lost streak that needs acknowledging.
 //
-// Design goal (CrazyGames retention pass): turn the silent factory boot
+// Design goal (CrazyGames retention pass): turn the silent garden boot
 // into a 3-4 second "reward arrival" sequence so the first thing the
 // returning player sees is the game noticing them. Banners are sequenced
 // not stacked — each one slides in, holds, slides out — so the player
@@ -91,7 +91,7 @@ function renderWelcomeOffline(scene: Phaser.Scene, amount: number): void {
     .text(w / 2, TOAST_TOP_Y, `${Strings.welcomeBackTitle}  +0`, {
       fontFamily: 'monospace',
       fontSize: '22px',
-      color: '#22f6ff',
+      color: '#7cc9ff',
       stroke: '#000000',
       strokeThickness: 4,
       backgroundColor: '#0a1014',

@@ -32,7 +32,7 @@ export const OperatorDefs: Record<OperatorId, OperatorDef> = {
     name: Strings.operatorPulseName,
     description: Strings.operatorPulseDesc,
     unlockCost: 0,
-    color: 0x22f6ff,
+    color: 0x7cc9ff,
     locked: false,
     apply: () => {
       // Pulse is the balanced default; no kit modifications.
@@ -43,7 +43,7 @@ export const OperatorDefs: Record<OperatorId, OperatorDef> = {
     name: Strings.operatorVantaName,
     description: Strings.operatorVantaDesc,
     unlockCost: 50,
-    color: 0xa76cff,
+    color: 0xb98cff,
     locked: false,
     apply: m => {
       // +2 drones on raid start. Modeled as +2 simultaneous weapon targets.
