@@ -198,7 +198,9 @@ export class Generator {
     this.overlay?.destroy();
     this.jitterTween?.stop();
     this.smokeEmitter?.destroy();
+    this.smokeEmitter = null;
     this.ambientSparks?.destroy();
+    this.ambientSparks = null;
     this.gear.destroy();
     this.sprite.destroy();
   }
