@@ -118,4 +118,3 @@ function applySeparation(): void {
     }
   }
 }
-

@@ -75,7 +75,7 @@ export const UpgradeEffects = {
   workerCount(): number {
     const lvl = saveSystem.get().upgrades.worker;
     if (lvl <= 0) return 0;
-    return Math.min(5, Math.ceil(lvl / 2));
+    return Math.min(Balance.workers.maxWorkers, Math.ceil(lvl / 2));
   },
   workerSpeed(): number {
     const lvl = saveSystem.get().upgrades.worker;

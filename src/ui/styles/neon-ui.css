@@ -2603,7 +2603,7 @@
 }
 
 @keyframes nfr-worker-pop {
-  0%   { opacity: 1; transform: translate(calc(-50%), calc(-50% - 0px)); }
+  0%   { opacity: 1; transform: translate(calc(-50%), calc(-50%)); }
   20%  { opacity: 1; transform: translate(calc(-50%), calc(-50% - 10px)); }
   100% { opacity: 0; transform: translate(calc(-50%), calc(-50% - 28px)); }
 }

@@ -382,13 +382,15 @@ export class FactoryScene extends Phaser.Scene {
   }
 
   private onWorkerDelivered(value: number, wx: number, _wy: number): void {
-    // Show a brief world-pinned "+N" popup at the deposit point (not the worker
-    // position) so multiple simultaneous deliveries stack at the same anchor.
+    // Show a brief world-pinned "+N" popup near the deposit point.
+    // Slight lateral offset so simultaneous deliveries from each side stay readable.
+    const POPUP_LATERAL_OFFSET = 14;
+    const POPUP_VERTICAL_OFFSET = 20;
     const dep = Balance.factory.workerDepositPoint;
-    const popupX = dep.x + (wx > dep.x ? 14 : -14); // small offset per worker side
+    const popupX = dep.x + (wx > dep.x ? POPUP_LATERAL_OFFSET : -POPUP_LATERAL_OFFSET);
     const el = nfrEl('div', 'nfr-worldpin nfr-worker-deposit-pop');
     el.textContent = `+${value}`;
-    this.pinHtmlToWorld(el, popupX, dep.y - 20);
+    this.pinHtmlToWorld(el, popupX, dep.y - POPUP_VERTICAL_OFFSET);
     // Auto-remove after 1.2 s (CSS animation handles fade-out).
     setTimeout(() => {
       this.unpinHtmlFromWorld(el);

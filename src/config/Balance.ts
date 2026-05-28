@@ -448,6 +448,8 @@ export const Balance = {
     generatorDropOffsetMax: 80,
     generatorPulseHz: 0.9,
     // Deposit point where factory workers drop off collected scrap.
+    // World coordinates: (0,0) is world centre; negative x is the left
+    // side of the factory, toward the generators at (-380, ±130).
     workerDepositPoint: { x: -140, y: 10 },
   },
   // Autonomous factory workers ("Haulers"). All tuning lives here.
@@ -468,6 +470,8 @@ export const Balance = {
     depositPauseSec: 0.3,
     // Separation nudge: workers closer than this distance offset slightly.
     separationRadius: 18,
+    // Hard cap on how many workers can be active at once.
+    maxWorkers: 5,
   },
 } as const;
 
