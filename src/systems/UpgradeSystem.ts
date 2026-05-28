@@ -71,11 +71,11 @@ export const UpgradeEffects = {
     return saveSystem.get().upgrades.drone + RefinerySystem.bonusStartingDrones();
   },
   // §workers — Hauler count, speed, carry capacity, and pickup radius.
-  // workerCount uses a staircase: every 2 levels adds one extra hauler (1,1,2,2,3,3,4,4,5).
+  // workerCount uses a staircase: 1 free hauler at level 0, then every 2
+  // levels adds one extra hauler (1,1,1,2,2,3,3,4,4,5).
   workerCount(): number {
     const lvl = saveSystem.get().upgrades.worker;
-    if (lvl <= 0) return 0;
-    return Math.min(Balance.workers.maxWorkers, Math.ceil(lvl / 2));
+    return Math.min(Balance.workers.maxWorkers, Math.max(1, Math.ceil(lvl / 2)));
   },
   workerSpeed(): number {
     const lvl = saveSystem.get().upgrades.worker;
