@@ -78,7 +78,7 @@ export class Generator {
   triggerProductionBurst(): void {
     if (this.infested) return;
     this.productionFlash = 1.0;
-    if (this.ambientSparks) {
+    if (this.ambientSparks?.active) {
       this.ambientSparks.explode(8, this.x + (Math.random() * 16 - 8), this.y + 6);
     }
     // Quick gear-spin kick.
