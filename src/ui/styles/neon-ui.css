@@ -164,6 +164,7 @@
 .nfr-backdrop {
   position: absolute;
   inset: 0;
+  z-index: 60;
   background:
     radial-gradient(ellipse at center, rgba(8, 12, 20, 0.55), rgba(2, 4, 8, 0.88)),
     rgba(0, 0, 0, 0.6);
