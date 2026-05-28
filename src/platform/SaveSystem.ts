@@ -14,7 +14,7 @@ import {
   type RaidZoneId,
 } from '../config/ScraplineDefs';
 
-export const SAVE_VERSION = 15;
+export const SAVE_VERSION = 16;
 
 export type QualityPreset = 'low' | 'medium' | 'high';
 const SAVE_KEY = 'save';
@@ -188,6 +188,7 @@ function defaultFtueUnlocks(): FtueUnlocks {
     luckUpgrade: false,
     factoryBoost: false,
     missionBoard: false,
+    workerUpgrade: false,
   };
 }
 
@@ -199,7 +200,7 @@ export function createDefaultSave(): SaveData {
     materials: createEmptyMaterials(),
     selectedZoneId: DEFAULT_RAID_ZONE_ID,
     unlockedZoneIds: [DEFAULT_RAID_ZONE_ID],
-    upgrades: { gen: 1, drone: 0, speed: 0, magnet: 0, damage: 0, luck: 0 },
+    upgrades: { gen: 1, drone: 0, speed: 0, magnet: 0, damage: 0, luck: 0, worker: 0 },
     refinery: {},
     selectedOperator: 'pulse',
     unlockedOperators: ['pulse'],
@@ -283,6 +284,7 @@ function migrateV1toV2(v1: MigratingSave): MigratingSave {
         luckUpgrade: true,
         factoryBoost: true,
         missionBoard: false,
+        workerUpgrade: true,
       }
     : defaultFtueUnlocks();
   const stats = (v1.stats ?? {}) as { runs?: number; extracts?: number };
@@ -546,7 +548,20 @@ function migrateV14toV15(v14: MigratingSave): MigratingSave {
   };
 }
 
-// Migration path - new versions add their case here. Old saves walk forward step
+// v15 → v16: adds upgrades.worker (new Hauler upgrade track) and
+// ftueUnlocks.workerUpgrade. Players who already have a successful extract
+// get the HAULER row unlocked immediately.
+function migrateV15toV16(v15: MigratingSave): MigratingSave {
+  const upgrades = { ...((v15.upgrades as object) ?? {}), worker: 0 };
+  const successfulExtracts = typeof (v15 as { successfulExtracts?: unknown }).successfulExtracts === 'number'
+    ? (v15 as { successfulExtracts: number }).successfulExtracts
+    : 0;
+  const ftueUnlocks = {
+    ...((v15.ftueUnlocks as object) ?? {}),
+    workerUpgrade: successfulExtracts >= 1,
+  };
+  return { ...v15, version: 16, upgrades, ftueUnlocks };
+}
 // by step. Per the M10 gate: a v0 save (no `version` field, written before
 // versioning existed) is treated as a fresh save - we don't try to merge
 // arbitrary partial shapes from a pre-history era.
@@ -573,6 +588,7 @@ function migrate(raw: unknown): SaveData {
   if (save.version === 12) save = migrateV12toV13(save);
   if (save.version === 13) save = migrateV13toV14(save);
   if (save.version === 14) save = migrateV14toV15(save);
+  if (save.version === 15) save = migrateV15toV16(save);
 
   if (save.version === SAVE_VERSION) {
     return save as unknown as SaveData;

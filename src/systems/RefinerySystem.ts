@@ -24,7 +24,8 @@ export type RefineryId =
   | 'alloyPress1'
   | 'circuitLoom1'
   | 'droneDispatcher1'
-  | 'factoryShield1';
+  | 'factoryShield1'
+  | 'haulerOverdrive';
 
 export interface RefineryDef {
   id: RefineryId;
@@ -131,6 +132,14 @@ export const RefineryDefs: Record<RefineryId, RefineryDef> = {
     tier: 3,
     requires: 'circuitLoom1',
   },
+  haulerOverdrive: {
+    id: 'haulerOverdrive',
+    name: 'Hauler Overdrive',
+    effect: 'Haulers move 40% faster',
+    costCores: 20,
+    tier: 2,
+    requires: 'droneOverclock1',
+  },
 };
 
 export const REFINERY_ORDER: RefineryId[] = [
@@ -142,6 +151,7 @@ export const REFINERY_ORDER: RefineryId[] = [
   'scrapCatalyst2',
   'scrapCatalyst3',
   'droneOverclock1',
+  'haulerOverdrive',
   'magnetSurge1',
   'ironPlating1',
   'quickBoots',
@@ -228,5 +238,10 @@ export const RefinerySystem = {
   // +15% core drop rate per Lucky Strike owned.
   coreDropBonus(): number {
     return RefinerySystem.isOwned('luckyStrike') ? 0.15 : 0;
+  },
+
+  // Hauler Overdrive: factory workers move 40% faster.
+  workerSpeedMult(): number {
+    return RefinerySystem.isOwned('haulerOverdrive') ? 1.4 : 1;
   },
 };

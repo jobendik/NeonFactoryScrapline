@@ -171,6 +171,7 @@ export const Balance = {
       magnet: { base: 50, scale: 1.55 },
       damage: { base: 55, scale: 1.60 },
       luck:   { base: 80, scale: 1.70 },
+      worker: { base: 80, scale: 1.65 },
     },
     coreChanceBase: 0.11,
     coreChancePerLuck: 0.035,
@@ -446,6 +447,27 @@ export const Balance = {
     generatorDropOffsetMin: 36,
     generatorDropOffsetMax: 80,
     generatorPulseHz: 0.9,
+    // Deposit point where factory workers drop off collected scrap.
+    workerDepositPoint: { x: -140, y: 10 },
+  },
+  // Autonomous factory workers ("Haulers"). All tuning lives here.
+  workers: {
+    // Base movement speed (px/s) and per-level increase.
+    baseSpeed: 80,
+    speedPerLevel: 10,
+    // Pickup detection radius (px) and per-level increase.
+    baseRadius: 30,
+    radiusPerLevel: 4,
+    // Deposit arrival radius — worker starts depositing when this close.
+    depositRange: 22,
+    // Worker trail unlocked at this level (same trail pattern as Drone).
+    trailLevelUnlock: 8,
+    // Wander radius around the nearest generator when no scrap is found.
+    wanderRadius: 80,
+    // Brief pause (seconds) after depositing before searching again.
+    depositPauseSec: 0.3,
+    // Separation nudge: workers closer than this distance offset slightly.
+    separationRadius: 18,
   },
 } as const;
 

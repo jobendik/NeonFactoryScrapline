@@ -36,6 +36,7 @@ import { DroneMissionSystem } from '../systems/DroneMissionSystem';
 import { EventSystem } from '../systems/EventSystem';
 import { openFortuneWheelPanel } from '../ui/FortuneWheelPanel';
 import { openDailyLoginPanel } from '../ui/DailyLoginPanel';
+import { WorkerSystem } from '../systems/WorkerSystem';
 
 // HTML factory for one button in the left-edge action column. The variant
 // drives both color and (for hover) the glow tint. Caller wires the click
@@ -163,6 +164,7 @@ export class FactoryScene extends Phaser.Scene {
     this.spawnGenerators();
     this.spawnMilestoneVisuals();
     this.spawnDrones();
+    this.spawnWorkers();
     this.buildUpgradePanel();
     this.buildOperatorPanel();
 
@@ -255,6 +257,8 @@ export class FactoryScene extends Phaser.Scene {
 
     for (const drone of this.drones) drone.update(dt, this.player.x, this.player.y);
 
+    WorkerSystem.update(dt, this.pickups);
+
     const baseRadius = UpgradeEffects.magnetRadius();
     for (const child of this.pickups.getChildren()) {
       const p = child as Pickup;
@@ -308,6 +312,7 @@ export class FactoryScene extends Phaser.Scene {
     this.generators = [];
     for (const drone of this.drones) drone.destroy();
     this.drones = [];
+    WorkerSystem.destroy();
     for (const card of this.upgradeCards) card.destroy();
     this.upgradeCards = [];
     for (const v of this.milestoneVisuals) v.destroy();
@@ -372,6 +377,32 @@ export class FactoryScene extends Phaser.Scene {
     p.spawn(pos.x, pos.y, 'scrap', 1);
   }
 
+  private spawnWorkers(): void {
+    WorkerSystem.init(this, (value, wx, wy) => this.onWorkerDelivered(value, wx, wy));
+  }
+
+  private onWorkerDelivered(value: number, wx: number, _wy: number): void {
+    // Show a brief world-pinned "+N" popup at the deposit point (not the worker
+    // position) so multiple simultaneous deliveries stack at the same anchor.
+    const dep = Balance.factory.workerDepositPoint;
+    const popupX = dep.x + (wx > dep.x ? 14 : -14); // small offset per worker side
+    const el = nfrEl('div', 'nfr-worldpin nfr-worker-deposit-pop');
+    el.textContent = `+${value}`;
+    this.pinHtmlToWorld(el, popupX, dep.y - 20);
+    // Auto-remove after 1.2 s (CSS animation handles fade-out).
+    setTimeout(() => {
+      this.unpinHtmlFromWorld(el);
+    }, 1200);
+    // Also fire FTUE toast the very first time a worker delivers.
+    const save = saveSystem.get();
+    if (save.upgrades.worker >= 1 && !this.workerFirstDeliveryToastShown) {
+      this.workerFirstDeliveryToastShown = true;
+      this.showHtmlToast('🤖 Hauler delivered scrap — automation is live!', 'cyan', 3500);
+    }
+  }
+
+  private workerFirstDeliveryToastShown = false;
+
   private spawnDrones(): void {
     const count = UpgradeEffects.droneCount();
     const withTrail = count >= 3; // §8.5 "Drone Lv. 3: drones gain trails"
@@ -420,6 +451,8 @@ export class FactoryScene extends Phaser.Scene {
         return u.magnetUpgrade;
       case 'drone':
         return u.droneUpgrade;
+      case 'worker':
+        return u.workerUpgrade;
       case 'damage':
         return u.damageUpgrade;
       case 'luck':
@@ -452,6 +485,7 @@ export class FactoryScene extends Phaser.Scene {
     this.spawnGenerators();
     this.spawnMilestoneVisuals();
     this.spawnDrones();
+    WorkerSystem.rebuild();
   }
 
   private showOfflineToast(): void {
@@ -832,6 +866,25 @@ export class FactoryScene extends Phaser.Scene {
         g.lineStyle(1, themeColor, 0.22);
         g.strokeRect(hx + 6, hy + 12, s.w - 12, s.h - 18);
       }
+    }));
+
+    // --- Deposit indicator: amber dashed circle at the worker deposit point.
+    //     Small enough not to dominate the floor; bright enough to be readable.
+    const dep = Balance.factory.workerDepositPoint;
+    this.ambientDecor.push(bake(-4, g => {
+      // Outer amber ring.
+      g.lineStyle(2, 0xff8800, 0.55);
+      g.strokeCircle(dep.x, dep.y, 20);
+      // Inner fill dot.
+      g.fillStyle(0xff8800, 0.15);
+      g.fillCircle(dep.x, dep.y, 18);
+      // Four corner tick-marks for a crosshair feel.
+      g.lineStyle(2, 0xffb347, 0.75);
+      const t = 8;
+      g.lineBetween(dep.x - 22, dep.y, dep.x - 22 + t, dep.y);
+      g.lineBetween(dep.x + 22 - t, dep.y, dep.x + 22, dep.y);
+      g.lineBetween(dep.x, dep.y - 22, dep.x, dep.y - 22 + t);
+      g.lineBetween(dep.x, dep.y + 22 - t, dep.x, dep.y + 22);
     }));
   }
 

@@ -70,6 +70,24 @@ export const UpgradeEffects = {
   droneCount(): number {
     return saveSystem.get().upgrades.drone + RefinerySystem.bonusStartingDrones();
   },
+  // §workers — Hauler count, speed, carry capacity, and pickup radius.
+  // workerCount uses a staircase: every 2 levels adds one extra hauler (1,1,2,2,3,3,4,4,5).
+  workerCount(): number {
+    const lvl = saveSystem.get().upgrades.worker;
+    if (lvl <= 0) return 0;
+    return Math.min(5, Math.ceil(lvl / 2));
+  },
+  workerSpeed(): number {
+    const lvl = saveSystem.get().upgrades.worker;
+    return (Balance.workers.baseSpeed + lvl * Balance.workers.speedPerLevel) * RefinerySystem.workerSpeedMult();
+  },
+  workerCarry(): number {
+    return saveSystem.get().upgrades.worker >= 5 ? 2 : 1;
+  },
+  workerRadius(): number {
+    const lvl = saveSystem.get().upgrades.worker;
+    return Balance.workers.baseRadius + lvl * Balance.workers.radiusPerLevel;
+  },
   // §10.2 Scrap multipliers + §10.3 Cyber-Core stack. Applied at bank time
   // in EconomySystem so it shows up in both raid loot and offline production.
   globalScrapMult(): number {

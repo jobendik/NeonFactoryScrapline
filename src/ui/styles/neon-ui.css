@@ -2589,3 +2589,21 @@
   text-transform: uppercase;
   white-space: nowrap;
 }
+
+/* ---- Factory worker deposit popup ---- */
+.nfr-worker-deposit-pop {
+  font-family: var(--nfr-font-display, 'Orbitron', sans-serif);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: #ffb347;
+  text-shadow: 0 0 8px rgba(255, 140, 0, 0.9), 0 1px 4px rgba(0, 0, 0, 0.95);
+  animation: nfr-worker-pop 1.2s ease-out forwards;
+  pointer-events: none;
+}
+
+@keyframes nfr-worker-pop {
+  0%   { opacity: 1; transform: translate(calc(-50%), calc(-50% - 0px)); }
+  20%  { opacity: 1; transform: translate(calc(-50%), calc(-50% - 10px)); }
+  100% { opacity: 0; transform: translate(calc(-50%), calc(-50% - 28px)); }
+}

@@ -322,7 +322,7 @@ function performPrestige(): void {
   save.materials = createEmptyMaterials();
   save.selectedZoneId = DEFAULT_RAID_ZONE_ID;
   save.unlockedZoneIds = [DEFAULT_RAID_ZONE_ID];
-  save.upgrades = { gen: 1, drone: 0, speed: 0, magnet: 0, damage: 0, luck: 0 };
+  save.upgrades = { gen: 1, drone: 0, speed: 0, magnet: 0, damage: 0, luck: 0, worker: 0 };
   save.infestation = { machineIds: [], failsBeforeFirst: Balance.infestation.failsBeforeInfestation };
   save.firstCoreCollected = false;
   save.lastSave = Date.now();
