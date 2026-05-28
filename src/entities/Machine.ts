@@ -4,6 +4,8 @@ import { applyGlow } from '../systems/NeonFX';
 
 export const GENERATOR_TEXTURE_KEY = 'machine-generator';
 export const GENERATOR_SMOKE_TEXTURE_KEY = 'machine-generator-smoke';
+export const GENERATOR_GEAR_TEXTURE_KEY = 'machine-generator-gear';
+export const GENERATOR_SPARK_TEXTURE_KEY = 'machine-generator-spark';
 
 // Generator is the only functional machine in M8 — pulses visually and yields a
 // scrap pickup on a fixed cadence. The cadence is driven by EconomySystem.SPM
@@ -15,6 +17,14 @@ export class Generator {
   readonly y: number;
   readonly slotIndex: number;
   private sprite: Phaser.GameObjects.Sprite;
+  // Spinning gear decal on top of the chassis — gives the generator a visible
+  // "this machine is working" beat that pairs with the production cadence.
+  private gear: Phaser.GameObjects.Sprite;
+  // Idle ambient spark emitter (always on while healthy) — small embers
+  // dribbling off the chassis. Production bursts use .explode() on top of this.
+  private ambientSparks: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
+  // Producing-flash overlay: brief tint kick the frame a drop is emitted.
+  private productionFlash = 0;
   private intervalSec: number;
   private timer: number;
   private pulse = 0;
@@ -28,15 +38,56 @@ export class Generator {
   constructor(scene: Phaser.Scene, x: number, y: number, intervalSec: number, slotIndex: number = 0) {
     Generator.ensureTexture(scene);
     Generator.ensureSmokeTexture(scene);
+    Generator.ensureGearTexture(scene);
+    Generator.ensureSparkTexture(scene);
     this.x = x;
     this.y = y;
     this.slotIndex = slotIndex;
     this.sprite = scene.add.sprite(x, y, GENERATOR_TEXTURE_KEY);
     this.sprite.setDepth(2);
     applyGlow(this.sprite, Balance.colors.player, 5, 0);
+
+    // Spinning gear sits on top of the chassis center as a clockwork
+    // detail — slightly translucent so the chassis pattern shows through.
+    this.gear = scene.add.sprite(x, y - 4, GENERATOR_GEAR_TEXTURE_KEY);
+    this.gear.setDepth(3);
+    this.gear.setAlpha(0.85);
+    this.gear.setScale(0.75);
+    applyGlow(this.gear, 0x22f6ff, 3, 0, 0.14);
+
+    // Ambient working sparks falling off the side.
+    this.ambientSparks = scene.add.particles(x, y + 6, GENERATOR_SPARK_TEXTURE_KEY, {
+      speed: { min: 18, max: 50 },
+      angle: { min: 70, max: 110 },
+      lifespan: 520,
+      frequency: 220,
+      scale: { start: 0.45, end: 0 },
+      alpha: { start: 0.95, end: 0 },
+      tint: [0xffd75a, 0x22f6ff],
+      gravityY: 80,
+    });
+    this.ambientSparks.setDepth(3);
+
     this.intervalSec = intervalSec;
     // Stagger so two generators don't drop on the same frame.
     this.timer = Math.random() * intervalSec;
+  }
+
+  // Called by FactoryScene when the generator drops a scrap chunk so the
+  // machine visibly reacts (gear kick, ember burst, brief brightness flash).
+  triggerProductionBurst(): void {
+    if (this.infested) return;
+    this.productionFlash = 1.0;
+    if (this.ambientSparks) {
+      this.ambientSparks.explode(8, this.x + (Math.random() * 16 - 8), this.y + 6);
+    }
+    // Quick gear-spin kick.
+    this.gear.scene.tweens.add({
+      targets: this.gear,
+      angle: this.gear.angle + 60,
+      duration: 220,
+      ease: 'Cubic.easeOut',
+    });
   }
 
   setIntervalSec(sec: number): void {
@@ -49,6 +100,9 @@ export class Generator {
     const scene = this.sprite.scene;
     if (infested) {
       this.sprite.setTint(0xff416b);
+      this.gear.setTint(0xff416b);
+      // Stop ambient sparks while infested — the machine isn't working.
+      this.ambientSparks?.stop();
       this.overlay = scene.add.graphics().setDepth(3);
       this.overlay.fillStyle(0xff1644, 0.28);
       this.overlay.fillRect(
@@ -85,6 +139,8 @@ export class Generator {
       this.smokeEmitter.setDepth(4);
     } else {
       this.sprite.clearTint();
+      this.gear.clearTint();
+      this.ambientSparks?.start();
       this.overlay?.destroy();
       this.overlay = null;
       this.jitterTween?.stop();
@@ -106,6 +162,19 @@ export class Generator {
     if (!this.infested) {
       const scale = 1 + Math.sin(this.pulse * Balance.factory.generatorPulseHz * Math.PI * 2) * 0.05;
       this.sprite.setScale(scale);
+      // Continuous gear rotation — feels mechanically alive even when no
+      // drop is being produced.
+      this.gear.setRotation(this.gear.rotation + dt * 1.8);
+
+      // Production flash decay. Tint the chassis brighter for a few frames
+      // after a drop so the eye locks on which generator just produced.
+      if (this.productionFlash > 0) {
+        this.productionFlash = Math.max(0, this.productionFlash - dt * 3.5);
+        const t = this.productionFlash;
+        const intensity = Math.floor(t * 80);
+        this.sprite.setTint(Phaser.Display.Color.GetColor(255, 255 - intensity, 255 - intensity * 2));
+        if (this.productionFlash <= 0.01) this.sprite.clearTint();
+      }
     }
     this.timer -= dt;
     if (this.timer <= 0) {
@@ -129,6 +198,8 @@ export class Generator {
     this.overlay?.destroy();
     this.jitterTween?.stop();
     this.smokeEmitter?.destroy();
+    this.ambientSparks?.destroy();
+    this.gear.destroy();
     this.sprite.destroy();
   }
 
@@ -211,6 +282,87 @@ export class Generator {
     ctx.beginPath();
     ctx.arc(cx, 11, 4, 0, Math.PI * 2);
     ctx.fill();
+    tex.refresh();
+  }
+
+  // Rotating gear decal: 8 teeth radial cog with hub.
+  static ensureGearTexture(scene: Phaser.Scene): void {
+    if (scene.textures.exists(GENERATOR_GEAR_TEXTURE_KEY)) return;
+    const dim = 40;
+    const tex = scene.textures.createCanvas(GENERATOR_GEAR_TEXTURE_KEY, dim, dim);
+    if (!tex) return;
+    const ctx = tex.context;
+    const cx = dim / 2;
+    const cy = dim / 2;
+    const r = dim / 2 - 4;
+    const teeth = 8;
+    const toothLen = 4;
+
+    // Toothed outer ring.
+    ctx.fillStyle = '#0a1623';
+    ctx.beginPath();
+    for (let i = 0; i < teeth * 2; i++) {
+      const a = (i / (teeth * 2)) * Math.PI * 2;
+      const radius = i % 2 === 0 ? r : r - toothLen;
+      const px = cx + Math.cos(a) * radius;
+      const py = cy + Math.sin(a) * radius;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(34,246,255,0.85)';
+    ctx.lineWidth = 1.4;
+    ctx.stroke();
+
+    // Inner hub.
+    ctx.fillStyle = '#13202e';
+    ctx.beginPath();
+    ctx.arc(cx, cy, r - 8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(34,246,255,0.55)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Spokes — 4-arm.
+    ctx.strokeStyle = 'rgba(34,246,255,0.65)';
+    ctx.lineWidth = 1.5;
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2 + Math.PI / 8;
+      ctx.beginPath();
+      ctx.moveTo(cx + Math.cos(a) * 2.5, cy + Math.sin(a) * 2.5);
+      ctx.lineTo(cx + Math.cos(a) * (r - 9), cy + Math.sin(a) * (r - 9));
+      ctx.stroke();
+    }
+
+    // Center boss.
+    ctx.fillStyle = '#22f6ff';
+    ctx.beginPath();
+    ctx.arc(cx, cy, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.beginPath();
+    ctx.arc(cx - 0.6, cy - 0.6, 1, 0, Math.PI * 2);
+    ctx.fill();
+
+    tex.refresh();
+  }
+
+  // Tiny soft spark used by the ambient working-particle emitter.
+  static ensureSparkTexture(scene: Phaser.Scene): void {
+    if (scene.textures.exists(GENERATOR_SPARK_TEXTURE_KEY)) return;
+    const dim = 8;
+    const tex = scene.textures.createCanvas(GENERATOR_SPARK_TEXTURE_KEY, dim, dim);
+    if (!tex) return;
+    const ctx = tex.context;
+    const cx = dim / 2;
+    const cy = dim / 2;
+    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, cx);
+    grad.addColorStop(0, 'rgba(255,255,255,1)');
+    grad.addColorStop(0.5, 'rgba(255,255,255,0.7)');
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, dim, dim);
     tex.refresh();
   }
 }
