@@ -66,6 +66,8 @@ export const Events = {
   // Retention Phase 1 — account XP / level events.
   ACCOUNT_LEVEL_UP: 'account:levelup',
   XP_GRANTED: 'xp:granted',
+  // Factory workers — emitted each time a hauler deposits a scrap load.
+  WORKER_DELIVERED: 'worker:delivered',
 } as const;
 
 export type EventName = (typeof Events)[keyof typeof Events];

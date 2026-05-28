@@ -98,6 +98,7 @@ export interface UpgradeLevels {
   magnet: number;
   damage: number;
   luck: number;
+  worker: number;
 }
 
 export interface RefineryLevels {
@@ -128,4 +129,5 @@ export interface FtueUnlocks {
   luckUpgrade: boolean;
   factoryBoost: boolean;
   missionBoard: boolean;
+  workerUpgrade: boolean;
 }

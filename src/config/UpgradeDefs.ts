@@ -85,9 +85,24 @@ export const UpgradeDefs: Record<UpgradeKey, UpgradeDef> = {
       10: 'Cores can drop in pairs',
     },
   },
+  worker: {
+    key: 'worker',
+    label: 'HAULER',
+    description: 'Autonomous scrap collector',
+    startLevel: 0,
+    milestones: {
+      1: 'First hauler deployed',
+      2: 'Two haulers',
+      4: 'Three haulers',
+      5: 'Carry 2 scrap per trip',
+      6: 'Four haulers',
+      8: 'Hauler trails',
+      10: 'Five haulers',
+    },
+  },
 };
 
-export const UPGRADE_KEYS: UpgradeKey[] = ['gen', 'drone', 'speed', 'magnet', 'damage', 'luck'];
+export const UPGRADE_KEYS: UpgradeKey[] = ['gen', 'drone', 'worker', 'speed', 'magnet', 'damage', 'luck'];
 
 export function nextCost(key: UpgradeKey, currentLevel: number): number {
   const cfg = Balance.economy.upgrades[key];

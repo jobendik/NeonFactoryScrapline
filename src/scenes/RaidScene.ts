@@ -1723,6 +1723,9 @@ export class RaidScene extends Phaser.Scene {
     if (realRaids >= 2) save.ftueUnlocks.droneUpgrade = true;
     if (realRaids >= 3) save.ftueUnlocks.damageUpgrade = true;
     if (realRaids >= 5) save.ftueUnlocks.factoryBoost = true;
+    // Worker (Hauler) is unlocked after the first successful extract so the
+    // player immediately sees automation in their very first factory visit.
+    if (save.successfulExtracts >= 1) save.ftueUnlocks.workerUpgrade = true;
   }
 
   // ---- tutorial-only helpers ----
