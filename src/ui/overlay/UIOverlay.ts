@@ -111,7 +111,10 @@ class UIOverlayImpl {
         this.scopes.get(scene.scene.key)?.nodes.delete(backdrop);
         this.modalCount = Math.max(0, this.modalCount - 1);
         if (this.modalCount === 0) this.restoreSceneInput(scene);
-        opts.onDismiss?.();
+        // Guard against stale callbacks: if the scene has already shut down
+        // and transitioned away, skip onDismiss to prevent it from mounting
+        // new DOM elements on a dead scene.
+        if (scene.scene.isActive()) opts.onDismiss?.();
       }, 180);
     };
 
@@ -156,6 +159,10 @@ class UIOverlayImpl {
     if (!scope) return;
     for (const node of scope.nodes) node.remove();
     scope.nodes.clear();
+    // Delete the scope entry so that when the scene boots again, track()
+    // creates a fresh scope and re-registers the SHUTDOWN listener. Without
+    // this, the second+ boot never gets a listener and leaked nodes persist.
+    this.scopes.delete(key);
     // If this scene had modals open, restore input on it so the next time it
     // boots, gameplay input is alive.
     this.restoreSceneInput(scene);
