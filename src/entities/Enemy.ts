@@ -8,7 +8,7 @@ import type { Rng } from '../core/Rng';
 // drawn by makeTexture has room to fade out without clipping. The pad is
 // shared between makeTexture (draws the halo) and spawn (computes body offset)
 // so both stay in sync.
-const TEXTURE_PAD = 24;
+const TEXTURE_PAD = 48;
 function enemyTextureDim(size: number): number {
   return Math.max(ENEMY_TEXTURE_DIM, size + TEXTURE_PAD);
 }
@@ -406,6 +406,48 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     halo.addColorStop(1, haloRgba(0));
     ctx.fillStyle = halo;
     ctx.fillRect(0, 0, dim, dim);
+
+    // 1b) Critter trimmings drawn BEHIND the body so they peek out: two soft
+    //     rounded fairy wings at the sides and two antennae with glowing
+    //     bobbles up top. Combined with the face (drawn last), this turns each
+    //     bare geometric shape into a little creature while the per-kind
+    //     silhouette stays intact for gameplay readability.
+    const accentLight = shade(spec.color, 0.5);
+    // Wings — semi-transparent petals tucked behind the body.
+    ctx.save();
+    ctx.globalAlpha = 0.55;
+    for (const sx of [-1, 1]) {
+      ctx.fillStyle = accentLight;
+      ctx.beginPath();
+      ctx.ellipse(cx + sx * r * 0.95, cy - r * 0.05, r * 0.5, r * 0.8, sx * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.ellipse(cx + sx * r * 0.95, cy - r * 0.05, r * 0.5, r * 0.8, sx * 0.5, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+    // Antennae — thin stalks with a glowing bobble at the tip.
+    ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+    ctx.lineWidth = 1.6;
+    ctx.lineCap = 'round';
+    for (const sx of [-1, 1]) {
+      const bx = cx + sx * r * 0.5;
+      const by = cy - r * 1.35;
+      ctx.beginPath();
+      ctx.moveTo(cx + sx * r * 0.28, cy - r * 0.6);
+      ctx.quadraticCurveTo(cx + sx * r * 0.38, cy - r * 1.05, bx, by);
+      ctx.stroke();
+      const bob = ctx.createRadialGradient(bx, by, 0, bx, by, r * 0.28);
+      bob.addColorStop(0, '#ffffff');
+      bob.addColorStop(0.45, colorHex);
+      bob.addColorStop(1, haloRgba(0));
+      ctx.fillStyle = bob;
+      ctx.beginPath();
+      ctx.arc(bx, by, r * 0.28, 0, Math.PI * 2);
+      ctx.fill();
+    }
 
     // 2) Build the shape path once, then both fill and stroke it.
     ctx.beginPath();
