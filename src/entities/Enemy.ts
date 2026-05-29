@@ -83,6 +83,11 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   // Tracks whether the preFX glow has been wired up for the current kind so
   // pool recycling doesn't re-add a duplicate filter every spawn.
   private glowApplied = false;
+  // Juice: a gentle idle breathing/squash-stretch (bobPhase) plus a transient
+  // scale "pop" on hit (hitPunch, decays to 0). Both are display-only — the
+  // physics body circle is set explicitly, so scaling never affects collision.
+  private bobPhase = 0;
+  private hitPunch = 0;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     Enemy.ensureTextures(scene);
@@ -122,6 +127,9 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.setActive(true).setVisible(true);
     this.setAlpha(1);
     this.setRotation(0);
+    this.bobPhase = rng ? rng.next() * Math.PI * 2 : Math.random() * Math.PI * 2;
+    this.hitPunch = 0;
+    this.setScale(1);
 
     const min = Balance.shooter.fireIntervalMinSec * 0.5;
     const max = Balance.shooter.fireIntervalMaxSec;
@@ -150,10 +158,21 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     const reduced = amount * (1 - this.buffedDamageReduction);
     this.hp -= reduced;
     this.setAlpha(0.55);
+    this.hitPunch = 1; // brief scale "pop", decayed in updateWobble()
     this.scene.time.delayedCall(60, () => {
       if (this.active) this.setAlpha(1);
     });
     return this.hp <= 0;
+  }
+
+  // Display-only squash-stretch: a soft idle breathing wobble plus a decaying
+  // pop on hit. Called each tick for living, moving critters.
+  private updateWobble(dt: number): void {
+    this.bobPhase += dt * 5.5;
+    if (this.hitPunch > 0) this.hitPunch = Math.max(0, this.hitPunch - dt * 5);
+    const breathe = Math.sin(this.bobPhase) * 0.05;
+    const punch = this.hitPunch * 0.16;
+    this.setScale(1 + breathe + punch, 1 - breathe + punch);
   }
 
   tick(dt: number, playerX: number, playerY: number, frozen: boolean = false): EnemyTickResult {
@@ -170,6 +189,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       this.knockbackTimer -= dt;
       return { fired: null };
     }
+    this.updateWobble(dt);
     const spec = EnemyDefs[this.kind];
     if (spec.behavior === 'shooter') {
       return this.tickShooter(dt, playerX, playerY);
