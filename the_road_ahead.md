@@ -85,8 +85,13 @@ still describe the old theme by design.
 - ✅ `tsc --noEmit` + `vite build` pass cleanly; no console errors on boot.
 - ✅ Saves remain compatible (only values/visuals changed, not keys).
 - ✅ Hub and raid both read as a cozy cartoon garden game (verified by screenshot).
-- ⚠️ Music is still the **procedural Web-Audio synth** (`src/audio/music.ts`).
-- ⚠️ SFX are still synthesized placeholders (`src/audio/sfx.ts`).
+- ✅ Music is now **file-based streamed tracks** (`src/audio/music.ts`): the
+  Suno loops in `public/assets/audio/` (theme / hub / flight cruise⇄intense)
+  play through `AudioBus` with cross-fades; the old synth is gone.
+- ✅ SFX have had the **cozy/magical pass** (`src/audio/sfx.ts`): re-voiced on
+  bell/chime + airy-lowpass + pentatonic primitives (no more harsh square/saw
+  blips), and a new level-up "bloom" is wired. Still synthesized (no samples),
+  so zero asset weight. Smoke-tested via `tools/audio-smoke.mjs`.
 - ⚠️ The in-raid HUD, pickups, and some entity silhouettes haven't had the candy
   pass yet (see roadmap).
 
@@ -94,16 +99,19 @@ still describe the old theme by design.
 
 ## 4. The road ahead (prioritized)
 
-### Phase 1 — Audio (in progress)
-1. **Music.** Prompts are ready in `music_assets.md`. Generate with Suno, drop
-   `.ogg`/`.mp3` into `public/assets/audio/`, then swap the synth `MusicEngine`
-   for a **file-based player** (loop + cross-fade through `AudioBus`), keeping
-   the synth as a fallback. Wire hub / flight (cruise⇄intense) / boss / win-lose
-   stings. *(Code change scoped and ready when files land.)*
-2. **SFX pass.** Replace the synth blips with cozy, magical sounds: stardust
-   pickup chime, star-heart sparkle, charm pop, spark-bolt cast, soft "boop" on
-   banishing a critter, moongate hum, level-up bloom, button taps. Either source
-   a cute UI/foley pack or generate short one-shots; wire through `src/audio/sfx.ts`.
+### Phase 1 — Audio ✅ DONE
+1. ✅ **Music.** The Suno loops landed in `public/assets/audio/` and
+   `MusicEngine` is now a **file-based player** (loop + cross-fade through
+   `AudioBus`): theme, garden hub, and the night-flight cruise⇄intense blend
+   (driven by `setIntensity`) are all wired. Missing files fail silent rather
+   than crashing. *(Boss/extra stings can reuse these layers for now.)*
+2. ✅ **SFX pass.** Re-voiced the whole synth library to cozy/magical timbres
+   in `src/audio/sfx.ts` — bell/chime partials, airy lowpass "poofs", smooth
+   sine glides, and a C-pentatonic palette so rapid sounds (cast, pickups)
+   harmonize. Stardust pickups climb a pentatonic ladder; critters banish with
+   a friendly "boop"; the moongate hums; a new **level-up bloom** (`sfxLevelUp`)
+   is wired to `ACCOUNT_LEVEL_UP`. Still 100% synthesized (no sample weight).
+   Verify with `tools/audio-smoke.mjs`.
 
 ### Phase 2 — Finish the art polish
 3. **In-raid HUD** → candy style (rounded HP heart bar, charm pips, wallet) to
