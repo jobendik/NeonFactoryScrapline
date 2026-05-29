@@ -272,6 +272,11 @@ export class RaidScene extends Phaser.Scene {
   }
 
   create(): void {
+    // Phaser won't call a method named shutdown() on its own; wire it to the
+    // SHUTDOWN event so per-night-flight teardown (bus.off, system stops, and
+    // the pooled sparkle-emitter reset) runs between flights instead of
+    // leaking handlers / reusing a destroyed emitter on the next flight.
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
     const wb = Balance.player.worldBounds;
     const width = wb.maxX - wb.minX;
     const height = wb.maxY - wb.minY;
