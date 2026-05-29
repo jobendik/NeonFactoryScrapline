@@ -136,7 +136,13 @@ export const Analytics = {
         ? err
         : (() => {
             try {
-              return JSON.stringify(err);
+              // JSON.stringify(undefined) / stringifying a function returns
+              // undefined — fall back to String() so `message` is always a
+              // string. Resource-load `error` events (a blocked SDK/ad script,
+              // offline, an ad-blocker) fire with err === undefined, and the
+              // .slice() below would otherwise throw *inside* the error
+              // handler, surfacing a console error on boot.
+              return JSON.stringify(err) ?? String(err);
             } catch {
               return String(err);
             }
