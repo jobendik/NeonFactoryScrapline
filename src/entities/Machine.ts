@@ -20,6 +20,9 @@ export class Generator {
   // Spinning rune decal on top of the chassis — gives the moonwell a visible
   // "this enchanted device is working" beat that pairs with the production cadence.
   private gear: Phaser.GameObjects.Sprite;
+  // Soft additive glint drifting over the moonlit pool — gently oscillates so
+  // the water shimmers (Phase 2 §6). Hidden while the well is cursed.
+  private shimmer: Phaser.GameObjects.Sprite;
   // Idle ambient spark emitter (always on while healthy) — small glimmers
   // dribbling off the chassis. Production bursts use .explode() on top of this.
   private ambientSparks: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
@@ -54,6 +57,13 @@ export class Generator {
     this.gear.setAlpha(0.85);
     this.gear.setScale(0.75);
     applyGlow(this.gear, 0x7cc9ff, 3, 0, 0.14);
+
+    // Pool shimmer — a soft white glint over the water, animated in tick().
+    this.shimmer = scene.add.sprite(x, y, GENERATOR_SPARK_TEXTURE_KEY);
+    this.shimmer.setDepth(2);
+    this.shimmer.setBlendMode(Phaser.BlendModes.ADD);
+    this.shimmer.setScale(4.5);
+    this.shimmer.setAlpha(0.25);
 
     // Ambient working glimmers falling off the side.
     this.ambientSparks = scene.add.particles(x, y + 6, GENERATOR_SPARK_TEXTURE_KEY, {
@@ -101,6 +111,7 @@ export class Generator {
     if (infested) {
       this.sprite.setTint(0xff416b);
       this.gear.setTint(0xff416b);
+      this.shimmer.setVisible(false);
       // Stop ambient glimmers while cursed — the enchanted device isn't working.
       this.ambientSparks?.stop();
       this.overlay = scene.add.graphics().setDepth(3);
@@ -140,6 +151,7 @@ export class Generator {
     } else {
       this.sprite.clearTint();
       this.gear.clearTint();
+      this.shimmer.setVisible(true);
       this.ambientSparks?.start();
       this.overlay?.destroy();
       this.overlay = null;
@@ -165,6 +177,10 @@ export class Generator {
       // Continuous rune rotation — feels magically alive even when no
       // drop is being produced.
       this.gear.setRotation(this.gear.rotation + dt * 1.8);
+
+      // Pool shimmer — gentle breathing alpha + a slow drift in scale.
+      this.shimmer.setAlpha(0.16 + (Math.sin(this.pulse * 3.1) * 0.5 + 0.5) * 0.2);
+      this.shimmer.setScale(4.2 + Math.sin(this.pulse * 2.0) * 0.6);
 
       // Production flash decay. Tint the chassis brighter for a few frames
       // after a drop so the eye locks on which moonwell just produced.
@@ -201,6 +217,7 @@ export class Generator {
     this.smokeEmitter = null;
     this.ambientSparks?.destroy();
     this.ambientSparks = null;
+    this.shimmer.destroy();
     this.gear.destroy();
     this.sprite.destroy();
   }
