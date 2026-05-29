@@ -6,6 +6,7 @@ import { InfestationSystem } from '../systems/InfestationSystem';
 import { MuteButton } from '../ui/MuteButton';
 import { SettingsMenu } from '../ui/SettingsMenu';
 import { AudioBus } from '../audio/AudioBus';
+import { sfxLevelUp } from '../audio/sfx';
 import { QualityManager } from '../systems/QualityManager';
 import { bus, Events } from '../core/EventBus';
 import { AchievementDefs, type AchievementId } from '../systems/AchievementSystem';
@@ -123,6 +124,7 @@ export class HUDScene extends Phaser.Scene {
         variant: 'reward',
         duration: 3600,
       });
+      sfxLevelUp();
       Analytics.track('account_levelup', { level, title });
     });
   }
