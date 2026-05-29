@@ -244,6 +244,53 @@
         transform: none;
       }
     }
+
+    /* ==========================================================================
+     * Rotate-to-landscape nudge. Starfall Garden is designed landscape; on a
+     * touch device held in portrait the playfield letterboxes to a thin strip,
+     * so show a friendly "turn sideways" overlay. CSS-only: it appears/hides
+     * automatically with the orientation media query (no JS, no game pause).
+     * ========================================================================== */
+    #nfr-rotate {
+      position: fixed;
+      inset: 0;
+      z-index: 10000;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 18px;
+      padding: 32px;
+      text-align: center;
+      background:
+        radial-gradient(ellipse at 50% 35%, rgba(124, 201, 255, 0.16) 0%, transparent 60%),
+        linear-gradient(180deg, #241a52 0%, #160e2e 100%);
+      color: #eaf4ff;
+      font-family: "Quicksand", "Nunito", system-ui, sans-serif;
+    }
+    #nfr-rotate__icon {
+      font-size: 54px;
+      animation: nfr-rotate-wobble 2.4s ease-in-out infinite;
+    }
+    @keyframes nfr-rotate-wobble {
+      0%, 100% { transform: rotate(-12deg); }
+      50%      { transform: rotate(78deg); }
+    }
+    #nfr-rotate__title {
+      font-size: clamp(20px, 6vw, 30px);
+      font-weight: 700;
+      text-shadow: 0 0 14px rgba(124, 201, 255, 0.6);
+    }
+    #nfr-rotate__msg {
+      font-size: clamp(13px, 4vw, 16px);
+      font-weight: 600;
+      color: rgba(205, 180, 255, 0.92);
+      max-width: 320px;
+      line-height: 1.5;
+    }
+    @media (orientation: portrait) and (pointer: coarse) {
+      #nfr-rotate { display: flex; }
+    }
   </style>
 </head>
 <body>
@@ -266,6 +313,11 @@
     </div>
   </div>
   <div id="game"></div>
+  <div id="nfr-rotate" aria-hidden="true">
+    <div id="nfr-rotate__icon">📱</div>
+    <div id="nfr-rotate__title">🌙 Starfall Garden</div>
+    <div id="nfr-rotate__msg">Turn your device sideways to play&nbsp;✨</div>
+  </div>
   <script>
     // Stuck-loading watchdog (playbook §10.6). If the preloader is still
     // visible 12 seconds after page load, surface a reload button. Boot
