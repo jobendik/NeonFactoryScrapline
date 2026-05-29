@@ -47,6 +47,8 @@ import {
   STARFIELD_NEAR_KEY,
   VIGNETTE_KEY,
   MOON_KEY,
+  SOFT_HALO_KEY,
+  SPARK_KEY,
 } from '../systems/NeonFX';
 import { AchievementSystem } from '../systems/AchievementSystem';
 import { RetentionSystem } from '../systems/RetentionSystem';
@@ -113,6 +115,9 @@ export class RaidScene extends Phaser.Scene {
   private waveDirector!: WaveDirector;
   private weapons!: WeaponSystem;
   private particles!: ParticleEffects;
+  // Shared white-sparkle emitter for juice bursts (banish blooms, pickup pops).
+  // Lazily created, exploded on demand, so there's no per-event allocation.
+  private sparkles?: Phaser.GameObjects.Particles.ParticleEmitter;
   private extraction!: ExtractionSystem;
   private greed!: GreedSystem;
   private runLoot = { scrap: 0, cores: 0 };
@@ -267,6 +272,11 @@ export class RaidScene extends Phaser.Scene {
   }
 
   create(): void {
+    // Phaser won't call a method named shutdown() on its own; wire it to the
+    // SHUTDOWN event so per-night-flight teardown (bus.off, system stops, and
+    // the pooled sparkle-emitter reset) runs between flights instead of
+    // leaking handlers / reusing a destroyed emitter on the next flight.
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
     const wb = Balance.player.worldBounds;
     const width = wb.maxX - wb.minX;
     const height = wb.maxY - wb.minY;
@@ -933,6 +943,10 @@ export class RaidScene extends Phaser.Scene {
     this.waveDirector.stop();
     this.inputSystem.destroy();
     this.particles.destroy();
+    // The shared sparkle emitter is owned by the scene and destroyed with it;
+    // clear the ref so a scene restart lazily rebuilds it instead of reusing
+    // a destroyed emitter.
+    this.sparkles = undefined;
     this.extraction.destroy();
     this.greed.stop();
     this.powerupSystem.stop();
@@ -1041,6 +1055,7 @@ export class RaidScene extends Phaser.Scene {
         type === 'scrap' ? '#7cc9ff' : '#ffd75a',
       );
     }
+    this.spawnCollectPop(p.x, p.y, type === 'scrap' ? 0x7cc9ff : 0xffd75a);
     if (type === 'core') {
       sfxCore();
       const save = saveSystem.get();
@@ -1274,6 +1289,58 @@ export class RaidScene extends Phaser.Scene {
         this.worldPopups.splice(i, 1);
         this.activePopups = Math.max(0, this.activePopups - 1);
       }
+    }
+  }
+
+  // ---- juice (Phase 2 §6) ----
+
+  private ensureSparkles(): Phaser.GameObjects.Particles.ParticleEmitter {
+    if (!this.sparkles) {
+      this.sparkles = this.add.particles(0, 0, SPARK_KEY, {
+        speed: { min: 40, max: 150 },
+        scale: { start: 1.0, end: 0 },
+        alpha: { start: 1, end: 0 },
+        lifespan: 380,
+        blendMode: 'ADD',
+        emitting: false,
+      });
+      this.sparkles.setDepth(41);
+    }
+    return this.sparkles;
+  }
+
+  // Soft expanding halo that scales up and fades — a reusable "poof" used for
+  // banishing critters and collecting pickups. Tinted to taste. Skipped under
+  // reduced-motion for accessibility.
+  private spawnPoof(x: number, y: number, color: number, fromScale: number, toScale: number, ms: number): void {
+    if (QualityManager.isReducedMotion()) return;
+    const halo = this.add.image(x, y, SOFT_HALO_KEY);
+    halo.setDepth(40).setBlendMode(Phaser.BlendModes.ADD).setTint(color).setScale(fromScale).setAlpha(0.85);
+    this.tweens.add({
+      targets: halo,
+      scale: toScale,
+      alpha: 0,
+      duration: ms,
+      ease: 'Cubic.Out',
+      onComplete: () => halo.destroy(),
+    });
+  }
+
+  // Critter banished: a pale-rose petal puff + a few white sparkles, so kills
+  // feel like a gentle bloom rather than a hard pop.
+  private spawnBanishBloom(x: number, y: number): void {
+    this.spawnPoof(x, y, 0xffc2e0, 0.25, 1.05, 320);
+    if (!QualityManager.isReducedMotion()) {
+      this.ensureSparkles().explode(QualityManager.particleQuantity(6), x, y);
+    }
+  }
+
+  // Pickup collected: a quick tinted ring pop + a small sparkle burst at the
+  // collection point, reinforcing the gather-loop reward.
+  private spawnCollectPop(x: number, y: number, color: number): void {
+    this.spawnPoof(x, y, color, 0.15, 0.6, 240);
+    if (!QualityManager.isReducedMotion()) {
+      this.ensureSparkles().explode(QualityManager.particleQuantity(5), x, y);
     }
   }
 
@@ -1858,6 +1925,7 @@ export class RaidScene extends Phaser.Scene {
     this.showDamagePopup(tx, ty - 16, damage, crit ? '#ff416b' : '#ffffff', crit);
     if (killed) {
       this.particles.enemyDeath(target.kind, tx, ty);
+      this.spawnBanishBloom(tx, ty);
       this.spawnDrops(target);
       const wasTank = target.kind === 'tank';
       const wasElite = target.kind === 'elite';
@@ -1898,6 +1966,7 @@ export class RaidScene extends Phaser.Scene {
       this.showDamagePopup(nextX, nextY - 16, damage, '#b98cff');
       if (nextKilled) {
         this.particles.enemyDeath(next.kind, nextX, nextY);
+        this.spawnBanishBloom(nextX, nextY);
         this.spawnDrops(next);
         const wasInfestedChain = next.kind === 'infested';
         next.kill();

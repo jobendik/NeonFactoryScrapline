@@ -92,8 +92,12 @@ still describe the old theme by design.
   bell/chime + airy-lowpass + pentatonic primitives (no more harsh square/saw
   blips), and a new level-up "bloom" is wired. Still synthesized (no samples),
   so zero asset weight. Smoke-tested via `tools/audio-smoke.mjs`.
-- ⚠️ The in-raid HUD, pickups, and some entity silhouettes haven't had the candy
-  pass yet (see roadmap).
+- ✅ The in-raid HUD, pickups, and entity silhouettes have had the candy/juice
+  pass: cute pickup sprites, critter-styled enemies, banish blooms + collect
+  pops + squash-stretch, cauldron bubbling + moonwell shimmer, a candy HUD, and
+  a cozy preloader. (See Phase 2/3 below.)
+- ✅ A rotate-to-landscape nudge covers portrait touch devices; the game scales
+  cleanly via Phaser `Scale.FIT`.
 
 ---
 
@@ -113,40 +117,58 @@ still describe the old theme by design.
    is wired to `ACCOUNT_LEVEL_UP`. Still 100% synthesized (no sample weight).
    Verify with `tools/audio-smoke.mjs`.
 
-### Phase 2 — Finish the art polish
-3. **In-raid HUD** → candy style (rounded HP heart bar, charm pips, wallet) to
-   match the hub.
-4. **Pickups**: custom cute sprites — a stardust sparkle and a star-heart gem
-   (currently small glowing blobs).
-5. **Enemy silhouettes**: round the bodies / add little wings & antennae so they
-   read as critters, not geometric shapes with faces (faces are a good start).
-6. **Juice**: squash-and-stretch / bob on critters, bloom burst on banish,
-   sparkle trails on pickups, screen-friendly hit feedback, cauldron bubbling,
-   moonwell shimmer. This is where "polished" is won or lost.
-7. **Moonwells / cauldron / glider** second look now that the palette is bright.
+### Phase 2 — Finish the art polish ✅ DONE
+3. ✅ **In-raid HUD → candy.** Extended the Cozy Candy CSS layer: HP bar is now
+   a rounded "heart" bar (♥ glyph, mint-green→rose fill), charm pips are candy
+   chips, the STARDUST/HEARTS wallet are rounded counter pills, timer + XP are
+   soft pills — all on the shared candy-glass surface.
+4. ✅ **Pickups.** `Pickup.ts` redrawn: stardust is a blue 4-point twinkle star,
+   the Star Heart is a glossy gold/rose heart gem (collision circle re-centred
+   per frame). Preview with `tools/sprites.mjs`.
+5. ✅ **Enemy silhouettes.** Kept the per-kind shapes for readability but added
+   soft fairy wings + antennae-with-bobbles behind every body, so they read as
+   critters alongside the existing faces.
+6. ✅ **Juice.** Critter idle squash-stretch + hit pop; banish bloom (petal poof
+   + sparkle burst); pickup collect pop; cauldron bubble emitter; moonwell pool
+   shimmer. All respect `QualityManager` reduced-motion + particle caps.
+7. ✅ **Moonwells / cauldron** second look (bubbles + shimmer added). The leaf
+   **glider** already reads well on the bright palette; left as-is.
 
 ### Phase 3 — Onboarding & feel
-8. **Tutorial / first 30 seconds**: make sure a brand-new player immediately
-   understands fly-out → gather → fly-home → grow, with the new cozy framing.
-9. **First-5-seconds appeal** for CrazyGames: bright, inviting, readable on a
-   thumbnail. Consider a proper title/menu beat using the Main Theme.
+8. ☑️ **Tutorial / first 30 seconds** — already implemented and verified to boot
+   clean: an initial stardust pile spawns beside the player, timed captions
+   walk MOVE → DASH → DASH = SAFE → POWER UP → FLY HOME, there's a safety-net HP
+   floor + reduced spawns, and a single-button "GROW" summary. Copy is terse by
+   design; reword only if playtests show confusion.
+9. ✅ **First-5-seconds appeal.** Reskinned the loading screen (`index.html`) to
+   a cozy preloader: 🌙 Starfall Garden + tagline, ✦ sparkle bullets, a rounded
+   candy progress bar, drifting twinkles. A full title/menu beat was
+   deliberately skipped — instant-play boot is better for CrazyGames.
 
-### Phase 4 — Balance & retention
-10. Re-tune the economy pacing for the new "cozy" audience (gentler difficulty
-    curve, generous early rewards) — the systems are intact; numbers may want a
-    friendlier ramp.
-11. Sanity-check the retention loop (daily gifts, streaks, wishes, companions,
-    New Moon) still reads well thematically and isn't too grindy/aggressive.
+### Phase 4 — Balance & retention  *(needs playtesting — left intentionally)*
+10. ⏳ Re-tune the economy for the cozy audience. **Not changed blind:** the
+    levers (`Balance.ts`, `Balance.tutorial`) are subjective and easy to break
+    without play sessions. Do this with real playtest data, not guesswork.
+11. ⏳ Sanity-check the retention loop. Same caveat — a review/tuning task best
+    done against live session metrics.
 
 ### Phase 5 — Ship readiness (CrazyGames)
-12. **Mobile pass**: touch controls, responsive layout, readable text at small
-    sizes, performance on mid-range phones.
-13. **Performance**: the Phaser bundle is ~1.5 MB (gzip ~340 KB) — fine, but
-    consider lazy-loading and verifying steady 60 FPS with full decor + particles.
-14. **CrazyGames checklist**: SDK lifecycle, rewarded-ad placements still themed,
-    loading watchdog, no console errors, fullscreen behavior, a strong thumbnail.
-15. **QA**: full playthrough on desktop + mobile; verify save migration from an
-    old "Neon Factory" save still loads.
+12. ✅ **Mobile pass.** `Scale.FIT` scales the stage to any screen + the HTML HUD
+    anchors to the canvas; added a portrait rotate-to-landscape nudge for touch.
+    Touch controls (`VirtualJoystick`) already exist. Verified readable at
+    landscape phone sizes.
+13. ⏳ **Performance.** Juice goes through `QualityManager` caps and pooled
+    emitters; bundle is ~1.5 MB (gzip ~340 KB). A real 60-FPS profile needs a
+    GPU device (the headless harness reports unrepresentative FPS), so left for
+    on-device profiling.
+14. ☑️ **CrazyGames checklist.** SDK lifecycle (`SDKBridge`), themed rewarded
+    ads, and the loading watchdog were already in place; **fixed a boot-time
+    console crash** in `Analytics.trackError` (undefined error → no longer
+    throws). Fullscreen + a strong thumbnail remain platform-side tasks.
+15. ☑️ **QA.** Smoke-verified: fresh-player tutorial boot, returning-player hub,
+    and an 8s combat run all render with **no JS console errors**; audio graph
+    smoke passes. A full human playthrough + old-save migration check still
+    wanted before launch.
 
 ### Phase 6 — Optional / longer-term
 16. **Real illustrated assets**: the biggest remaining quality ceiling. Swap the
@@ -175,3 +197,11 @@ still describe the old theme by design.
 - The **mechanics are solid and working** — there is no reason to start the
   codebase from scratch; the remaining work is presentation (art/audio/feel),
   tuning, and ship-readiness.
+- **Verification tooling** (all honor `PW_CHROME` for a system chromium when
+  Playwright can't download one):
+  - `tools/shot.mjs out.png <Scene>` — scene screenshots (`SHOT_PREVIEW=` to lay
+    textures out; `VIEWPORT_W/H` for responsive shots).
+  - `tools/sprites.mjs out.png pickup-,enemy-` — previews lazily-created entity
+    textures by importing the real modules via the vite dev server.
+  - `tools/audio-smoke.mjs` — calls every `sfx*` function against a live Web
+    Audio graph in headless chromium to catch synthesis regressions.

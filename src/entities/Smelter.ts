@@ -34,6 +34,7 @@ export class Smelter {
   private smokeEmitter: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
   private emberEmitter: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
   private depositGlowEmitter: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
+  private bubbleEmitter: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
   private pulseTimer = 0;
   private pulseFlash = 0;
   private stackX = 0;
@@ -111,6 +112,21 @@ export class Smelter {
       tint: COLOR_CYAN,
     });
     this.depositGlowEmitter.setDepth(2);
+
+    // Brew bubbles — small teal bubbles welling up across the cauldron mouth
+    // and dissolving, so the potion actually simmers (the texture's painted
+    // bubbles are static). The mouth sits near world (x, y - 6).
+    this.bubbleEmitter = scene.add.particles(x, y - 6, SMELTER_EMBER_KEY, {
+      x: { min: -34, max: 34 },
+      speed: { min: 8, max: 20 },
+      angle: { min: 255, max: 285 },
+      lifespan: 650,
+      frequency: 150,
+      scale: { start: 0.14, end: 0.5 },
+      alpha: { start: 0.6, end: 0 },
+      tint: 0x9ff7c6,
+    });
+    this.bubbleEmitter.setDepth(1);
   }
 
   update(dt: number): void {
@@ -145,6 +161,7 @@ export class Smelter {
     this.smokeEmitter?.destroy();
     this.emberEmitter?.destroy();
     this.depositGlowEmitter?.destroy();
+    this.bubbleEmitter?.destroy();
   }
 
   static ensureTextures(scene: Phaser.Scene): void {

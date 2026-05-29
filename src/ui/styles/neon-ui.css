@@ -2704,13 +2704,71 @@
   box-shadow: none !important;
 }
 
-/* HUD — rounded, readable on the bright lawn. */
-.nfr-hpbar { border-radius: 999px !important; border: 2px solid rgba(255,255,255,0.3) !important; }
-.nfr-hpbar__track { border-radius: 999px !important; }
-.nfr-hpbar__fill { border-radius: 999px !important; }
-.nfr-pip { border-radius: 999px !important; }
-.nfr-wallet-line { text-shadow: 0 1px 3px rgba(20, 10, 40, 0.65) !important; }
+/* HUD — soft candy pills that read on the bright twilight sky. A shared
+   "candy glass" surface (translucent twilight-violet + white rim + drop
+   shadow) ties the HP bar, charm pips, wallet, timer and XP bar together to
+   match the hub. */
+
+/* HP "heart" bar — mint-green when healthy, rose when low, with a ♥ glyph. */
+.nfr-hpbar {
+  border-radius: 999px !important;
+  border: 2px solid rgba(255, 255, 255, 0.35) !important;
+  background: linear-gradient(180deg, rgba(78, 60, 132, 0.82), rgba(52, 38, 92, 0.9)) !important;
+  box-shadow: 0 6px 16px rgba(20, 10, 40, 0.35) !important;
+  padding: 4px 6px !important;
+}
+.nfr-hpbar__track { border-radius: 999px !important; background: rgba(20, 12, 40, 0.55) !important; }
+.nfr-hpbar__fill {
+  border-radius: 999px !important;
+  background: linear-gradient(90deg, #57e39a, #9af7c6) !important;
+}
+.nfr-hpbar.is-low .nfr-hpbar__fill  { background: linear-gradient(90deg, #ff6f91, #ff9bb4) !important; }
+.nfr-hpbar.is-heal .nfr-hpbar__fill { background: linear-gradient(90deg, #72ff9f, #c8ffe0) !important; }
+.nfr-hpbar__label::before {
+  content: '\2665'; /* ♥ */
+  color: #ff8fb0;
+  font-size: 13px;
+  margin-right: 5px;
+  text-shadow: 0 0 6px rgba(255, 143, 176, 0.85);
+}
+
+/* Charm pips — little rounded candy chips. */
+.nfr-pip {
+  border-radius: 999px !important;
+  border: 2px solid rgba(255, 255, 255, 0.3) !important;
+  background: linear-gradient(180deg, rgba(78, 60, 132, 0.82), rgba(52, 38, 92, 0.9)) !important;
+  box-shadow: 0 4px 10px rgba(20, 10, 40, 0.3) !important;
+}
+
+/* Wallet — rounded candy counters (STARDUST / HEARTS). */
+.nfr-wallet-line {
+  border-radius: 999px !important;
+  padding: 4px 13px 4px 9px !important;
+  background: linear-gradient(180deg, rgba(78, 60, 132, 0.8), rgba(52, 38, 92, 0.88)) !important;
+  border: 2px solid rgba(255, 255, 255, 0.24) !important;
+  box-shadow: 0 5px 14px rgba(20, 10, 40, 0.32) !important;
+  text-shadow: 0 1px 3px rgba(20, 10, 40, 0.65) !important;
+}
+
+/* Timer — soft candy pill. */
+.nfr-timer {
+  border-radius: 18px !important;
+  padding: 4px 18px 6px !important;
+  background: linear-gradient(180deg, rgba(78, 60, 132, 0.7), rgba(52, 38, 92, 0.8)) !important;
+  border: 2px solid rgba(255, 255, 255, 0.2) !important;
+  box-shadow: 0 5px 14px rgba(20, 10, 40, 0.3) !important;
+}
 .nfr-timer__value, .nfr-combo, .nfr-spm { text-shadow: 0 2px 4px rgba(20, 10, 40, 0.6) !important; }
+
+/* XP bar — slim gold candy pill. */
+.nfr-xp-bar__track {
+  height: 6px !important;
+  border-radius: 999px !important;
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
+  background: rgba(20, 12, 40, 0.55) !important;
+}
+.nfr-xp-bar__fill { background: linear-gradient(90deg, #ffe27a, #f4b740) !important; }
+.nfr-xp-bar__label { color: #ffe9a8 !important; }
 
 /* Toasts + callouts — rounded soft cards. */
 .nfr-toast { border-radius: 16px !important; }

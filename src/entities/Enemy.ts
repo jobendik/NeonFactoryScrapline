@@ -8,7 +8,7 @@ import type { Rng } from '../core/Rng';
 // drawn by makeTexture has room to fade out without clipping. The pad is
 // shared between makeTexture (draws the halo) and spawn (computes body offset)
 // so both stay in sync.
-const TEXTURE_PAD = 24;
+const TEXTURE_PAD = 48;
 function enemyTextureDim(size: number): number {
   return Math.max(ENEMY_TEXTURE_DIM, size + TEXTURE_PAD);
 }
@@ -83,6 +83,11 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   // Tracks whether the preFX glow has been wired up for the current kind so
   // pool recycling doesn't re-add a duplicate filter every spawn.
   private glowApplied = false;
+  // Juice: a gentle idle breathing/squash-stretch (bobPhase) plus a transient
+  // scale "pop" on hit (hitPunch, decays to 0). Both are display-only — the
+  // physics body circle is set explicitly, so scaling never affects collision.
+  private bobPhase = 0;
+  private hitPunch = 0;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     Enemy.ensureTextures(scene);
@@ -122,6 +127,9 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.setActive(true).setVisible(true);
     this.setAlpha(1);
     this.setRotation(0);
+    this.bobPhase = rng ? rng.next() * Math.PI * 2 : Math.random() * Math.PI * 2;
+    this.hitPunch = 0;
+    this.setScale(1);
 
     const min = Balance.shooter.fireIntervalMinSec * 0.5;
     const max = Balance.shooter.fireIntervalMaxSec;
@@ -150,10 +158,21 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     const reduced = amount * (1 - this.buffedDamageReduction);
     this.hp -= reduced;
     this.setAlpha(0.55);
+    this.hitPunch = 1; // brief scale "pop", decayed in updateWobble()
     this.scene.time.delayedCall(60, () => {
       if (this.active) this.setAlpha(1);
     });
     return this.hp <= 0;
+  }
+
+  // Display-only squash-stretch: a soft idle breathing wobble plus a decaying
+  // pop on hit. Called each tick for living, moving critters.
+  private updateWobble(dt: number): void {
+    this.bobPhase += dt * 5.5;
+    if (this.hitPunch > 0) this.hitPunch = Math.max(0, this.hitPunch - dt * 5);
+    const breathe = Math.sin(this.bobPhase) * 0.05;
+    const punch = this.hitPunch * 0.16;
+    this.setScale(1 + breathe + punch, 1 - breathe + punch);
   }
 
   tick(dt: number, playerX: number, playerY: number, frozen: boolean = false): EnemyTickResult {
@@ -170,6 +189,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       this.knockbackTimer -= dt;
       return { fired: null };
     }
+    this.updateWobble(dt);
     const spec = EnemyDefs[this.kind];
     if (spec.behavior === 'shooter') {
       return this.tickShooter(dt, playerX, playerY);
@@ -406,6 +426,48 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     halo.addColorStop(1, haloRgba(0));
     ctx.fillStyle = halo;
     ctx.fillRect(0, 0, dim, dim);
+
+    // 1b) Critter trimmings drawn BEHIND the body so they peek out: two soft
+    //     rounded fairy wings at the sides and two antennae with glowing
+    //     bobbles up top. Combined with the face (drawn last), this turns each
+    //     bare geometric shape into a little creature while the per-kind
+    //     silhouette stays intact for gameplay readability.
+    const accentLight = shade(spec.color, 0.5);
+    // Wings — semi-transparent petals tucked behind the body.
+    ctx.save();
+    ctx.globalAlpha = 0.55;
+    for (const sx of [-1, 1]) {
+      ctx.fillStyle = accentLight;
+      ctx.beginPath();
+      ctx.ellipse(cx + sx * r * 0.95, cy - r * 0.05, r * 0.5, r * 0.8, sx * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.ellipse(cx + sx * r * 0.95, cy - r * 0.05, r * 0.5, r * 0.8, sx * 0.5, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+    // Antennae — thin stalks with a glowing bobble at the tip.
+    ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+    ctx.lineWidth = 1.6;
+    ctx.lineCap = 'round';
+    for (const sx of [-1, 1]) {
+      const bx = cx + sx * r * 0.5;
+      const by = cy - r * 1.35;
+      ctx.beginPath();
+      ctx.moveTo(cx + sx * r * 0.28, cy - r * 0.6);
+      ctx.quadraticCurveTo(cx + sx * r * 0.38, cy - r * 1.05, bx, by);
+      ctx.stroke();
+      const bob = ctx.createRadialGradient(bx, by, 0, bx, by, r * 0.28);
+      bob.addColorStop(0, '#ffffff');
+      bob.addColorStop(0.45, colorHex);
+      bob.addColorStop(1, haloRgba(0));
+      ctx.fillStyle = bob;
+      ctx.beginPath();
+      ctx.arc(bx, by, r * 0.28, 0, Math.PI * 2);
+      ctx.fill();
+    }
 
     // 2) Build the shape path once, then both fill and stroke it.
     ctx.beginPath();

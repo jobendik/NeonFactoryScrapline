@@ -7,8 +7,12 @@ const out = process.argv[2] || 'shot.png';
 const wantScene = process.argv[3] || 'FactoryScene';
 const URL = process.env.SHOT_URL || 'http://localhost:5173/';
 
-const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 1600, height: 900 }, deviceScaleFactor: 1 });
+const browser = await chromium.launch(
+  process.env.PW_CHROME ? { executablePath: process.env.PW_CHROME } : {},
+);
+const vpW = Number(process.env.VIEWPORT_W) || 1600;
+const vpH = Number(process.env.VIEWPORT_H) || 900;
+const page = await browser.newPage({ viewport: { width: vpW, height: vpH }, deviceScaleFactor: 1 });
 const errors = [];
 page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
 page.on('pageerror', e => errors.push(String(e)));

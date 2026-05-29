@@ -147,6 +147,14 @@ export class FactoryScene extends Phaser.Scene {
   }
 
   create(): void {
+    // Phaser does NOT auto-invoke a method named shutdown(); it must be wired
+    // to the SHUTDOWN event (as SummaryScene/DraftScene do). Without this the
+    // per-visit teardown never ran, so generators from a previous hub visit —
+    // whose particle emitters Phaser had already destroyed on scene stop —
+    // survived into the next visit and crashed on the moonwell production
+    // burst (`explode()` on a torn-down emitter). It also balances the bus
+    // handlers / music started in create().
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
     RaidZoneSystem.syncUnlocks();
     ResearchSystem.ensureSaveShape();
     DroneMissionSystem.ensureSaveShape();

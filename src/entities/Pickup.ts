@@ -50,6 +50,10 @@ export class Pickup extends Phaser.Physics.Arcade.Sprite {
     this.type = type;
     this.value = Math.max(1, value);
     this.setTexture(type === 'scrap' ? SCRAP_TEXTURE_KEY : CORE_TEXTURE_KEY);
+    // Re-center the collision circle on the active texture frame (stardust and
+    // Star Heart frames differ in size), so magnet pickup stays accurate.
+    const r = 7;
+    this.body_.setCircle(r, this.width / 2 - r, this.height / 2 - r);
     this.setPosition(x, y);
     this.body_.enable = true;
     this.setActive(true).setVisible(true);
@@ -180,75 +184,92 @@ export class Pickup extends Phaser.Physics.Arcade.Sprite {
   }
 
   static ensureTextures(scene: Phaser.Scene): void {
+    // Stardust — a cute 4-point twinkle/sparkle star (moon-blue) with a bright
+    // core and a soft halo, plus a tiny secondary sparkle for the "twinkle".
     if (!scene.textures.exists(SCRAP_TEXTURE_KEY)) {
-      const dim = 24;
+      const dim = 26;
       const tex = scene.textures.createCanvas(SCRAP_TEXTURE_KEY, dim, dim);
       if (tex) {
         const ctx = tex.context;
         const cx = dim / 2;
         const cy = dim / 2;
-        const r = 5;
-        // Cyan glow halo
+        // Moon-blue glow halo.
         const halo = ctx.createRadialGradient(cx, cy, 1, cx, cy, cx);
-        halo.addColorStop(0, 'rgba(124, 201, 255, 0.85)');
-        halo.addColorStop(0.5, 'rgba(124, 201, 255, 0.35)');
+        halo.addColorStop(0, 'rgba(124, 201, 255, 0.8)');
+        halo.addColorStop(0.5, 'rgba(124, 201, 255, 0.32)');
         halo.addColorStop(1, 'rgba(124, 201, 255, 0)');
         ctx.fillStyle = halo;
         ctx.fillRect(0, 0, dim, dim);
-        // Stardust mote body with shine
-        const body = ctx.createLinearGradient(cx - r, cy - r, cx + r, cy + r);
-        body.addColorStop(0, '#e3ffff');
-        body.addColorStop(0.5, '#7cc9ff');
-        body.addColorStop(1, '#0e7a8a');
+        // 4-point sparkle: long points with concave waists.
+        const outer = 9.5;
+        const waist = 2.6;
+        ctx.beginPath();
+        for (let i = 0; i < 8; i++) {
+          const a = -Math.PI / 2 + i * (Math.PI / 4);
+          const rad = i % 2 === 0 ? outer : waist;
+          const px = cx + Math.cos(a) * rad;
+          const py = cy + Math.sin(a) * rad;
+          if (i === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        const body = ctx.createRadialGradient(cx, cy, 0, cx, cy, outer);
+        body.addColorStop(0, '#ffffff');
+        body.addColorStop(0.45, '#bfeaff');
+        body.addColorStop(1, '#4aa6e8');
         ctx.fillStyle = body;
-        ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
-        ctx.strokeStyle = 'rgba(255,255,255,0.95)';
-        ctx.lineWidth = 1.5;
-        ctx.strokeRect(cx - r + 0.5, cy - r + 0.5, r * 2 - 1, r * 2 - 1);
-        // Highlight pip
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        // Bright center + a small offset twinkle.
         ctx.fillStyle = 'rgba(255,255,255,0.95)';
-        ctx.fillRect(cx - r + 1, cy - r + 1, 2, 2);
+        ctx.beginPath();
+        ctx.arc(cx, cy, 1.7, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(cx + outer * 0.42, cy - outer * 0.42, 1.1, 0, Math.PI * 2);
+        ctx.fill();
         tex.refresh();
       }
     }
+    // Star Heart — a glossy gold/rose heart gem with a shine highlight and a
+    // warm halo, distinct from the blue stardust sparkle.
     if (!scene.textures.exists(CORE_TEXTURE_KEY)) {
-      const dim = 28;
+      const dim = 30;
       const tex = scene.textures.createCanvas(CORE_TEXTURE_KEY, dim, dim);
       if (tex) {
         const ctx = tex.context;
         const cx = dim / 2;
         const cy = dim / 2;
-        const r = 8;
-        // Gold glow halo
+        // Warm gold glow halo.
         const halo = ctx.createRadialGradient(cx, cy, 0, cx, cy, cx);
-        halo.addColorStop(0, 'rgba(255, 215, 90, 0.85)');
-        halo.addColorStop(0.5, 'rgba(255, 215, 90, 0.35)');
-        halo.addColorStop(1, 'rgba(255, 215, 90, 0)');
+        halo.addColorStop(0, 'rgba(255, 205, 120, 0.8)');
+        halo.addColorStop(0.5, 'rgba(255, 205, 120, 0.32)');
+        halo.addColorStop(1, 'rgba(255, 205, 120, 0)');
         ctx.fillStyle = halo;
         ctx.fillRect(0, 0, dim, dim);
-        // Hex body gradient
+        // Heart path (two top lobes + bottom tip), centered.
+        const s = 8.5;
         ctx.beginPath();
-        for (let i = 0; i < 6; i++) {
-          const a = -Math.PI / 2 + (i / 6) * Math.PI * 2;
-          const px = cx + Math.cos(a) * r;
-          const py = cy + Math.sin(a) * r;
-          if (i === 0) ctx.moveTo(px, py);
-          else ctx.lineTo(px, py);
-        }
+        ctx.moveTo(cx, cy + s * 0.7);
+        ctx.bezierCurveTo(cx - s * 1.15, cy - s * 0.15, cx - s * 0.7, cy - s * 1.05, cx, cy - s * 0.4);
+        ctx.bezierCurveTo(cx + s * 0.7, cy - s * 1.05, cx + s * 1.15, cy - s * 0.15, cx, cy + s * 0.7);
         ctx.closePath();
-        const body = ctx.createRadialGradient(cx - 2, cy - 2, 0, cx, cy, r);
-        body.addColorStop(0, '#ffffff');
-        body.addColorStop(0.35, '#ffe48f');
-        body.addColorStop(1, '#a37115');
+        const body = ctx.createRadialGradient(cx - 2, cy - 3, 0, cx, cy, s * 1.2);
+        body.addColorStop(0, '#fff6e0');
+        body.addColorStop(0.4, '#ffd877');
+        body.addColorStop(0.8, '#ff9ec4');
+        body.addColorStop(1, '#d4607f');
         ctx.fillStyle = body;
         ctx.fill();
-        ctx.strokeStyle = 'rgba(255,255,255,0.95)';
-        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+        ctx.lineWidth = 1.2;
         ctx.stroke();
-        // Bright pip in center
-        ctx.fillStyle = 'rgba(255,255,255,0.95)';
+        // Glossy shine highlight on the left lobe.
+        ctx.fillStyle = 'rgba(255,255,255,0.85)';
         ctx.beginPath();
-        ctx.arc(cx, cy, 1.6, 0, Math.PI * 2);
+        ctx.ellipse(cx - s * 0.45, cy - s * 0.45, s * 0.28, s * 0.18, -0.5, 0, Math.PI * 2);
         ctx.fill();
         tex.refresh();
       }
